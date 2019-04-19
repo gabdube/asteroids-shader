@@ -1,0 +1,102 @@
+#version 450
+
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_ARB_shading_language_420pack : enable
+
+layout (constant_id = 1) const uint MAX_OBJECT_COUNT = 64;
+layout (constant_id = 2) const uint MAX_INDICES = 1000;
+layout (constant_id = 3) const uint MAX_ATTRIBUTES = 1000;
+
+struct VkDrawIndexedIndirectCommand {
+    uint indexCount;
+    uint instanceCount;
+    uint firstIndex;
+    uint vertexOffset;
+    uint firstInstance;
+};
+
+struct GameObject {
+    mat4 matrix;
+    vec2 position;
+    float angle;
+    float velocity;
+    float lifetime;
+    uint commandIndex;
+};
+
+layout (std430, set=0, binding=0) buffer DrawCommands {
+    VkDrawIndexedIndirectCommand commands[MAX_OBJECT_COUNT];
+} draw;
+
+layout (std430, set=0, binding=1) buffer DrawCommandCount {
+    uint value;
+} draw_count;
+
+layout (std430, set=0, binding=2) buffer Index {
+    uint values[MAX_INDICES];
+} indices;
+
+layout (std430, set=0, binding=3) buffer Attributes {
+    vec4 values[MAX_ATTRIBUTES];
+} attributes;
+
+layout (std430, set=0, binding=4) buffer GameData {
+    GameObject objects[MAX_OBJECT_COUNT];
+} game;
+
+layout (std430, set=0, binding=5) buffer GameState {
+    double currentTime;
+    double pastTime;
+    uint up;
+    uint down;
+    uint left;
+    uint right;
+    uint space;
+    float reloadTime;
+} state;
+
+const mat4 IDENTITY = mat4(
+    vec4(1.0, 0.0, 0.0, 0.0),
+    vec4(0.0, 1.0, 0.0, 0.0),
+    vec4(0.0, 0.0, 1.0, 0.0),
+    vec4(0.0, 0.0, 0.0, 1.0)
+);
+
+void init_player() {
+    const uint pindices[5] = {0, 1, 2, 3, 0};
+    const vec2 positions[4] = {vec2(0.0, -0.03), vec2(0.04, 0.04), vec2(0.00, 0.02), vec2(-0.04, 0.04)};
+
+    for (uint i=0; i<pindices.length(); i++) {
+        indices.values[i] = pindices[i];
+    }
+
+    for (uint i=0; i<positions.length(); i++) {
+        attributes.values[i] = vec4(positions[i], 0.0, 1.0);
+    }
+
+    draw_count.value = 1;
+    draw.commands[0] = VkDrawIndexedIndirectCommand(pindices.length(), 1, 0, 0, 0);
+    game.objects[0] = GameObject(IDENTITY, vec2(0.0, 0.0), 0.0, 0.0, 0.0, 0);
+} 
+
+void init_shot() {
+    const uint pindices[2] = {0, 1};
+    const vec2 positions[2] = {vec2(0.0, 0.015), vec2(0.0, -0.015)};
+    const uint indicesOffset = 5;
+    const uint positionsOffset = 4;
+
+    for (uint i=0; i<pindices.length(); i++) {
+        indices.values[i+indicesOffset] = pindices[i];
+    }
+
+    for (uint i=0; i<positions.length(); i++) {
+        attributes.values[i+positionsOffset] = vec4(positions[i], 0.0, 1.0);
+    }
+}
+
+void main() {
+    init_player();
+    init_shot();
+    state.pastTime = state.currentTime;
+    state.reloadTime = float(state.currentTime);
+}

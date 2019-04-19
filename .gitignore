@@ -1,0 +1,16 @@
+*.pyc
+*.spv
+*.exe
+build
+Settings.cap
+cmd
+.idea
+.vscode
+assets/**
+python/
+**/process_results.txt
+env/
+dist/
+panic-panda.spec
+tetris.build/
+tetris.dist/
