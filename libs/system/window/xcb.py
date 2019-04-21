@@ -226,8 +226,11 @@ XK_Up = 0xff52
 XK_Right = 0xff53
 XK_Down = 0xff54
 
+XK_Space = 0x0020
+
 k = e.Keys
 key_map = {
+    XK_Space: k.Space,
     XK_Left: k.Left,
     XK_Up: k.Up,
     XK_Right: k.Right,
@@ -518,12 +521,20 @@ class XcbWindow(object):
                 x = press_event.event_x, y = press_event.event_y
             )
 
-        elif evt_id == XCB_KEY_PRESS:
+        elif evt_id == XCB_KEY_PRESS or evt_id == XCB_KEY_RELEASE:
             key_event = cast(event_ptr, POINTER(xcb_key_press_event_t)).contents
             key_sym_id = self.internal_keymaps[key_event.detail]
+
             event_key = key_map.get(key_sym_id)
-            if event_key is not None:
+            if event_key is None:
+                return
+
+            if evt_id == XCB_KEY_PRESS:
                 self.events[e.KeyPress] = e.KeyPressData(
+                    key = event_key
+                )
+            else:
+                self.events[e.KeyRelease] = e.KeyReleaseData(
                     key = event_key
                 )
 

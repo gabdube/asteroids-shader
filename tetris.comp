@@ -7,6 +7,8 @@ layout (constant_id = 1) const uint MAX_OBJECT_COUNT = 64;
 layout (constant_id = 2) const uint MAX_INDICES = 1000;
 layout (constant_id = 3) const uint MAX_ATTRIBUTES = 1000;
 
+const uint MESH_COUNT = 30;
+
 struct VkDrawIndexedIndirectCommand {
     uint indexCount;
     uint instanceCount;
@@ -23,6 +25,20 @@ struct GameObject {
     float lifetime;
     uint commandIndex;
 };
+
+struct Mesh {
+    uint indicesOffset;
+    uint indicesCount;
+    uint vertexOffset;
+    uint vertexCount;
+};
+
+const mat4 IDENTITY = mat4(
+    vec4(1.0, 0.0, 0.0, 0.0),
+    vec4(0.0, 1.0, 0.0, 0.0),
+    vec4(0.0, 0.0, 1.0, 0.0),
+    vec4(0.0, 0.0, 0.0, 1.0)
+);
 
 layout (std430, set=0, binding=0) buffer DrawCommands {
     VkDrawIndexedIndirectCommand commands[MAX_OBJECT_COUNT];
@@ -42,6 +58,7 @@ layout (std430, set=0, binding=3) buffer Attributes {
 
 layout (std430, set=0, binding=4) buffer GameData {
     GameObject objects[MAX_OBJECT_COUNT];
+    Mesh meshes[MESH_COUNT];
 } game;
 
 layout (std430, set=0, binding=5) buffer GameState {
@@ -95,20 +112,17 @@ void shoot(vec2 pos, float angle) {
         return; // no more space!!!
     }
 
+    vec2 truePos = vec2(pos.x + (sin(angle) * -0.05), pos.y + (cos(angle) * -0.05));
     mat4 mat = mat4(
         vec4(cos(angle), -sin(angle), 0.0, 0.0),
         vec4(sin(angle), cos(angle), 0.0, 0.0),
         vec4(0.0, 0.0, 1.0, 0.0),
-        vec4(pos.x + (sin(angle) * -0.05), pos.y + (cos(angle) * -0.05), 0.0, 1.0)
+        vec4(truePos, 0.0, 1.0)
     );
 
-    
-    uint indicesCount = 2;
-    uint vertexOffset = 4;
-    uint firstIndex = 5;
-
-    game.objects[shotIndex] = GameObject(mat, pos, angle, 1.5, float(state.currentTime + 1.3), shotIndex);
-    draw.commands[shotIndex] = VkDrawIndexedIndirectCommand(indicesCount, 1, firstIndex, vertexOffset, shotIndex);
+    Mesh shotMesh = game.meshes[1];
+    game.objects[shotIndex] = GameObject(mat, truePos, angle, 1.5, float(state.currentTime + 1.3), shotIndex);
+    draw.commands[shotIndex] = VkDrawIndexedIndirectCommand(shotMesh.indicesCount, 1, shotMesh.indicesOffset, shotMesh.vertexOffset, shotIndex);
     draw_count.value += 1;
 }
 
@@ -158,7 +172,7 @@ void cleanObjects() {
     while (index < draw_count.value) {
         if (game.objects[index].commandIndex != 0) {
             float life = game.objects[index].lifetime;
-            if (life < state.currentTime) {
+            if (life > 0 && life < state.currentTime) {
                 removeObject(index);
             }
         }
@@ -182,11 +196,9 @@ void updateObjects(double delta) {
             vel = obj.velocity;
             angle = obj.angle;
 
-            pos = obj.matrix[3].xy;
-            pos = vec2(
-                pos.x + -(timeStep * sin(angle) * vel),
-                pos.y + -(timeStep * cos(angle) * vel)
-            );
+            pos = obj.position;
+            pos.x -= (timeStep * sin(angle)) * vel;
+            pos.y -= (timeStep * cos(angle)) * vel;
 
             if (pos.x > 1.05) { pos.x = -1.02;}
             else if (pos.x < -1.05) { pos.x = 1.02; }
@@ -195,11 +207,48 @@ void updateObjects(double delta) {
             else if (pos.y < -1.05) { pos.y = 1.02; }
 
             game.objects[index].matrix[3].xy = pos;
+            game.objects[index].position = pos;
             updatedCount += 1;
         }
 
         index += 1;
     }
+}
+
+uint updateScoreNumber(uint n, uint scoreIndex) {
+    const uint BASE_NUMBER_MESH_INDEX = 2;
+    const uint BASE_SCORE_OBJ_INDEX = 1;
+    uint scoreObjIndex = BASE_SCORE_OBJ_INDEX+scoreIndex;
+
+    Mesh newMesh = game.meshes[BASE_NUMBER_MESH_INDEX + n];
+    draw.commands[scoreObjIndex] = VkDrawIndexedIndirectCommand(
+        newMesh.indicesCount, 1,
+        newMesh.indicesOffset, newMesh.vertexOffset,
+        scoreObjIndex
+    );
+
+    return n;
+}
+
+void updateScore() {
+    uint intTime = uint(state.currentTime);
+    if (intTime > 9999) {
+        intTime = 9999;
+    }
+
+    if (intTime >= 1000) {
+        intTime -= updateScoreNumber((intTime / 1000), 0) * 1000;
+    }
+
+    if (intTime >= 100) {
+        intTime -= updateScoreNumber((intTime / 100), 1) * 100;
+    }
+
+    if (intTime >= 10) {
+        intTime -= updateScoreNumber((intTime / 10), 2) * 10;
+    }
+    
+    updateScoreNumber(intTime, 3);
 }
 
 void main() {
@@ -210,6 +259,8 @@ void main() {
     
     cleanObjects();
     updateObjects(delta);
+
+    updateScore();
     
     state.pastTime = state.currentTime;
 }

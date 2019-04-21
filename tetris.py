@@ -1,6 +1,6 @@
 import sys
-sys.stdout = open('run_log.txt', 'w')
-sys.stderr = open('run_err_log.txt', 'w')
+#sys.stdout = open('run_log.txt', 'w')
+#sys.stderr = open('run_err_log.txt', 'w')
 sys.path.append('./libs')
 
 import time
@@ -12,7 +12,7 @@ from collections import namedtuple
 from system import Window, events
 from vulkan import vk
 
-DEBUG = False
+DEBUG = True
 
 #
 # HELPERS METHODS
@@ -1677,6 +1677,10 @@ def update(tetris, base_time, input_state, window):
     device = tetris.device
     alloc = tetris.game_state_alloc
 
+    # When a key is held on linux, the system generates a KeyDown and a KeyUp event but Windows
+    # only generates a KeyDown. This method makes this code work on both OS
+    input_buffer = {}  
+
     ptr = c_void_p(0)
     tetris.MapMemory(device, alloc, 0, vk.WHOLE_SIZE, 0, byref(ptr))
 
@@ -1692,8 +1696,10 @@ def update(tetris, base_time, input_state, window):
             continue
         
         key = event_data.key
-        input_state[key] = event is events.KeyPress
-
+        pressed = event is events.KeyPress
+        input_state[key] = input_buffer.get(key, pressed)
+        input_buffer[key] = pressed
+    
     keys = events.Keys
     data.up = input_state[keys.Up]
     data.right = input_state[keys.Right]
@@ -1837,6 +1843,7 @@ def cleanup(tetris):
 MAX_OBJECT_COUNT = 64
 MAX_INDICES_COUNT = 1000
 MAX_ATTRIBUTES_COUNT = 1000
+MESH_COUNT = 30
 
 
 # Structures painfully extracted from the shaders
@@ -1850,12 +1857,24 @@ class GameObject(Structure):
         ('velocity', c_float),
         ('lifetime', c_float),
         ('command_index', c_uint32),
-        ('padding', c_uint8 * 12)
+        ('padding', c_uint8 * 8)
+    )
+
+
+class Mesh(Structure):
+    _fields_ = (
+        ('indices_offset', c_uint32),
+        ('indices_count', c_uint32),
+        ('vertex_offset', c_uint32),
+        ('vertex_count', c_uint32),
     )
 
 
 class GameData(Structure):
-    _fields_ = (('objects', GameObject * MAX_OBJECT_COUNT),)
+    _fields_ = (
+        ('objects', GameObject * MAX_OBJECT_COUNT),
+        ('meshes', Mesh * MAX_OBJECT_COUNT),
+    )
 
 
 class GameState(Structure):
