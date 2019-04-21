@@ -9,10 +9,16 @@ layout (location = 0) in vec4 inPos;
 
 struct GameObject {
     mat4 matrix;
+    
     vec2 position;
     float angle;
     float velocity;
+    
+    float displayAngle;
+    float displayAngleUpdate;
+
     float lifetime;
+
     uint commandIndex;
 };
 

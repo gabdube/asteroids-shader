@@ -7,7 +7,7 @@ layout (constant_id = 1) const uint MAX_OBJECT_COUNT = 64;
 layout (constant_id = 2) const uint MAX_INDICES = 1000;
 layout (constant_id = 3) const uint MAX_ATTRIBUTES = 1000;
 
-const uint MESH_COUNT = 30;
+const uint MESH_COUNT = 21;
 
 struct VkDrawIndexedIndirectCommand {
     uint indexCount;
@@ -19,10 +19,16 @@ struct VkDrawIndexedIndirectCommand {
 
 struct GameObject {
     mat4 matrix;
+
     vec2 position;
     float angle;
     float velocity;
+    
+    float displayAngle;
+    float displayAngleUpdate;
+
     float lifetime;
+
     uint commandIndex;
 };
 
@@ -52,6 +58,8 @@ layout (std430, set=0, binding=3) buffer Attributes {
 layout (std430, set=0, binding=4) buffer GameData {
     GameObject objects[MAX_OBJECT_COUNT];
     Mesh meshes[MESH_COUNT];
+    uint asteroidMeshIndex;
+    uint asteroidCount;
 } game;
 
 layout (std430, set=0, binding=5) buffer GameState {
@@ -72,9 +80,31 @@ const mat4 IDENTITY = mat4(
     vec4(0.0, 0.0, 0.0, 1.0)
 );
 
+// https://www.shadertoy.com/view/4djSRW
+float hash11(float p)
+{
+    p = fract(p * .1031);
+    p *= p + 19.19;
+    p *= p + p;
+    return fract(p);
+}
+
+float hash11Min(float p, float minValue) {
+    float rando = 0.0;
+    float value = hash11(p);
+
+    while (value < minValue) {
+        rando += .01;
+        value = hash11(p+rando);
+    }
+
+    return value;
+}
+
+
 void initPlayer() {
-    const uint PINDICES[5] = {0, 1, 2, 3, 0};
-    const vec2 POSITIONS[4] = {vec2(0.0, -0.03), vec2(0.04, 0.04), vec2(0.00, 0.02), vec2(-0.04, 0.04)};
+    const uint PINDICES[] = {0, 1, 2, 3, 0};
+    const vec2 POSITIONS[] = {vec2(0.0, -0.03), vec2(0.04, 0.04), vec2(0.00, 0.02), vec2(-0.04, 0.04)};
 
     for (uint i=0; i<PINDICES.length(); i++) {
         indices.values[i] = PINDICES[i];
@@ -88,7 +118,14 @@ void initPlayer() {
 
     draw_count.value = 1;
     draw.commands[0] = VkDrawIndexedIndirectCommand(PINDICES.length(), 1, 0, 0, 0);
-    game.objects[0] = GameObject(IDENTITY, vec2(0.0, 0.0), 0.0, 0.0, 0.0, 0);
+    game.objects[0] = GameObject(
+        IDENTITY,
+        vec2(0.0, 0.0),         // pos
+        0.0, 0.0,               // angle / vel
+        0.0, 0.0,               // display angle / display angle vel
+        0.0,                    // lifetime
+        0
+    );
 } 
 
 void initShotMesh() {
@@ -114,7 +151,8 @@ void initScoreMeshes() {
     const vec2 POSITIONS[] = {
         vec2(-0.015, -0.03), vec2(0.015, -0.03),
         vec2(-0.015,  0.00), vec2(0.015,  0.00),
-        vec2(-0.015,  0.03), vec2(0.015,  0.03),};
+        vec2(-0.015,  0.03), vec2(0.015,  0.03)
+    };
 
     Mesh lastMesh = game.meshes[1];
 
@@ -190,13 +228,13 @@ void initScore() {
     const uint MAX_SCORE_NUMBERS = 4;
 
     Mesh zeroMesh = game.meshes[2];
-    uint baseObjectIndex = 1;
+    uint baseObjectIndex = draw_count.value;
     uint index;
     vec2 pos = vec2(-0.95, -0.95);
 
     for (uint i = 0; i < MAX_SCORE_NUMBERS; i++) {
         index = baseObjectIndex+i;
-        game.objects[index] = GameObject(IDENTITY, pos, 0.0, 0.0, 0.0, index);
+        game.objects[index] = GameObject(IDENTITY, pos, 0.0, 0.0, 0.0, 0.0, 0.0, index);
         draw.commands[index] = VkDrawIndexedIndirectCommand(zeroMesh.indicesCount, 1, zeroMesh.indicesOffset, zeroMesh.vertexOffset, index);
         
         pos.x += 0.05;
@@ -205,7 +243,48 @@ void initScore() {
 }
 
 void initAsteroids() {
-    const uint baseMeshIndex = 11;
+    const uint BASE_MESH_INDEX = 12;
+    const uint POINT_COUNT_PER_OBJECT = 12;
+    const float PI = 3.1415926535897932384626433832795;
+
+    uint asteroidCount = MESH_COUNT - BASE_MESH_INDEX;
+    game.asteroidMeshIndex = BASE_MESH_INDEX;
+    game.asteroidCount = asteroidCount;
+
+    Mesh lastMesh = game.meshes[11];
+    uint indicesBaseOffset = lastMesh.indicesOffset + lastMesh.indicesCount;
+    uint positionsBaseOffset = lastMesh.vertexOffset + lastMesh.vertexCount;
+
+    float radStep = (2*PI) / float(POINT_COUNT_PER_OBJECT);
+    float dist, radValue, lastDist = 0.453672;
+
+    for (uint i = 0; i < asteroidCount; i++) {
+        radValue = 0.0;
+
+        // Generate vertex
+        for (uint j = 0; j < POINT_COUNT_PER_OBJECT; j++) {
+            lastDist = dist = hash11Min(float(i+j), 0.5) * 0.09;
+
+            indices.values[indicesBaseOffset+j] = j;
+            attributes.values[positionsBaseOffset+j] = vec4(dist * cos(radValue), dist * sin(radValue), 0.0, 1.0);
+
+            radValue += radStep;
+        }
+
+        // Last vertex (close the loop with the first position)
+        indices.values[indicesBaseOffset+POINT_COUNT_PER_OBJECT] = 0;
+
+        // Save mesh info
+        game.meshes[BASE_MESH_INDEX+i] = Mesh(
+            indicesBaseOffset,
+            POINT_COUNT_PER_OBJECT + 1,
+            positionsBaseOffset,
+            POINT_COUNT_PER_OBJECT
+        );
+
+        indicesBaseOffset += POINT_COUNT_PER_OBJECT + 1;
+        positionsBaseOffset += POINT_COUNT_PER_OBJECT;
+    }
 }
 
 void main() {

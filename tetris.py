@@ -1843,7 +1843,7 @@ def cleanup(tetris):
 MAX_OBJECT_COUNT = 64
 MAX_INDICES_COUNT = 1000
 MAX_ATTRIBUTES_COUNT = 1000
-MESH_COUNT = 30
+MESH_COUNT = 21
 
 
 # Structures painfully extracted from the shaders
@@ -1855,9 +1855,10 @@ class GameObject(Structure):
         ('position', c_float*2),
         ('angle', c_float),
         ('velocity', c_float),
+        ('display_angle', c_float),
+        ('display_angle_update', c_float),
         ('lifetime', c_float),
-        ('command_index', c_uint32),
-        ('padding', c_uint8 * 8)
+        ('command_index', c_uint32)
     )
 
 
@@ -1874,6 +1875,8 @@ class GameData(Structure):
     _fields_ = (
         ('objects', GameObject * MAX_OBJECT_COUNT),
         ('meshes', Mesh * MAX_OBJECT_COUNT),
+        ('asteroidMeshIndex', c_uint32),
+        ('asteroidCount', c_uint32)
     )
 
 
