@@ -8,6 +8,7 @@ layout (constant_id = 2) const uint MAX_INDICES = 1000;
 layout (constant_id = 3) const uint MAX_ATTRIBUTES = 1000;
 
 const uint MESH_COUNT = 21;
+const uint MAX_ASTEROID = 20;
 
 struct VkDrawIndexedIndirectCommand {
     uint indexCount;
@@ -39,6 +40,11 @@ struct Mesh {
     uint vertexCount;
 };
 
+struct Asteroid {
+    uint life;
+    float radius;
+};
+
 const mat4 IDENTITY = mat4(
     vec4(1.0, 0.0, 0.0, 0.0),
     vec4(0.0, 1.0, 0.0, 0.0),
@@ -65,6 +71,9 @@ layout (std430, set=0, binding=3) buffer Attributes {
 layout (std430, set=0, binding=4) buffer GameData {
     GameObject objects[MAX_OBJECT_COUNT];
     Mesh meshes[MESH_COUNT];
+    Asteroid asteroids[MAX_ASTEROID];
+    uint activeAsteroidCount;
+    uint currentLevel;
     uint asteroidMeshIndex;
     uint asteroidCount;
 } game;
@@ -87,19 +96,6 @@ float hash11(float p)
     p *= p + p;
     return fract(p);
 }
-
-float hash11Min(float p, float minValue) {
-    float rando = 0.0;
-    float value = hash11(p);
-
-    while (value < minValue) {
-        rando += .01;
-        value = hash11(p+rando);
-    }
-
-    return value;
-}
-
 
 uint nextFreeObject() {
     if (draw_count.value == MAX_OBJECT_COUNT) {
@@ -295,21 +291,54 @@ void updateScore() {
 }
 
 void beginNewLevel() {
+    const float PI = 3.1415926535897932384626433832795;
 
-    // TEST add asteroid
-    /*Mesh testMesh = game.meshes[BASE_MESH_INDEX];
-    uint index = draw_count.value;
-    game.objects[index] = GameObject(
-        IDENTITY,
-        vec2(hash11(2.35436), hash11(5.35436)),  // pos
-        hash11(52.1436), 0.5,                    // angle / vel
-        0.0, PI,                                 // display angle / display angle velocity
-        0.0,                                     // lifetime
-        index
-    );
-    draw.commands[index] = VkDrawIndexedIndirectCommand(testMesh.indicesCount, 1, testMesh.indicesOffset, testMesh.vertexOffset, index);
-    draw_count.value += 1;*/
+    if (game.activeAsteroidCount != 0) {
+        return;
+    }
 
+    float ftime = float(state.currentTime);
+    float x, y, a;
+    float vel = 0.5 + (0.1*float(game.currentLevel));
+    uint index, meshIndex, nextCount = game.currentLevel + 5;
+    float rando = 0.0;
+
+    for (uint i = 0; i < nextCount; i++) {
+        rando = hash11(rando + i + ftime);
+
+        meshIndex = uint(hash11(rando));
+        meshIndex = game.asteroidMeshIndex + meshIndex;
+        Mesh mesh = game.meshes[meshIndex];
+
+        index = nextFreeObject();
+        if (index == 0) {
+            continue;
+        }
+
+        x = hash11(rando + i + 19.9);
+        y = hash11(rando + i + 9.19);
+        a = hash11(rando + i + 987.129) * (2*PI);
+
+        game.objects[index] = GameObject(
+            IDENTITY,
+            vec2(x, y),                    // pos
+            a, vel,                       // angle / vel
+            a, PI,                         // display angle / display angle velocity
+            0.0,                          // lifetime
+            index
+        );
+
+        draw.commands[index] = VkDrawIndexedIndirectCommand(
+            mesh.indicesCount, 1, 
+            mesh.indicesOffset, mesh.vertexOffset,
+            index
+        );
+        
+        draw_count.value += 1;
+    }
+
+    game.activeAsteroidCount = nextCount;
+    game.currentLevel += 1;
 }
 
 void main() {

@@ -8,6 +8,7 @@ layout (constant_id = 2) const uint MAX_INDICES = 1000;
 layout (constant_id = 3) const uint MAX_ATTRIBUTES = 1000;
 
 const uint MESH_COUNT = 21;
+const uint MAX_ASTEROID = 20;
 
 struct VkDrawIndexedIndirectCommand {
     uint indexCount;
@@ -39,6 +40,11 @@ struct Mesh {
     uint vertexCount;
 };
 
+struct Asteroid {
+    uint life;
+    float radius;
+};
+
 layout (std430, set=0, binding=0) buffer DrawCommands {
     VkDrawIndexedIndirectCommand commands[MAX_OBJECT_COUNT];
 } draw;
@@ -58,6 +64,9 @@ layout (std430, set=0, binding=3) buffer Attributes {
 layout (std430, set=0, binding=4) buffer GameData {
     GameObject objects[MAX_OBJECT_COUNT];
     Mesh meshes[MESH_COUNT];
+    Asteroid asteroids[MAX_ASTEROID];
+    uint activeAsteroidCount;
+    uint currentLevel;
     uint asteroidMeshIndex;
     uint asteroidCount;
 } game;
