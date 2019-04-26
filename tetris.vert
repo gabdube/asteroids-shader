@@ -23,6 +23,12 @@ struct GameObject {
 };
 
 layout (std430, set=0, binding=0) readonly buffer GameData {
+    uint currentLevel;
+
+    uint asteroidMeshIndex;
+    uint asteroidMeshCount;
+    uint padding;
+
     GameObject objects[MAX_OBJECT_COUNT];
 } game;
 

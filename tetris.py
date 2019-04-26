@@ -1845,6 +1845,7 @@ MAX_INDICES_COUNT = 1000
 MAX_ATTRIBUTES_COUNT = 1000
 MESH_COUNT = 21
 MAX_ASTEROID = 20
+MAX_SHOT = 20
 
 
 # Structures painfully extracted from the shaders
@@ -1871,21 +1872,37 @@ class Mesh(Structure):
         ('vertex_count', c_uint32),
     )
 
+
 class Asteroid(Structure):
     _fields_ = (
         ('life', c_uint32),
+        ('index', c_uint32),
         ('radius', c_uint32),
     ) 
 
+
+class AsteroidArray(Structure):
+    _fields_ = (
+        ('count', c_uint32),
+        ('asteroids', Asteroid * MAX_ASTEROID),
+    ) 
+
+class ShotArray(Structure):
+    _fields_ = (
+        ('count', c_uint32),
+        ('shots', c_uint32 * MAX_SHOT),
+    ) 
+
+
 class GameData(Structure):
     _fields_ = (
-        ('objects', GameObject * MAX_OBJECT_COUNT),
-        ('meshes', Mesh * MAX_OBJECT_COUNT),
-        ('asteroids', Asteroid * MAX_ASTEROID),
-        ('active_asteroid', c_uint32),
         ('current_level', c_uint32),
         ('asteroidMeshIndex', c_uint32),
-        ('asteroidCount', c_uint32),
+        ('asteroidMeshCount', c_uint32),
+        ('objects', GameObject * MAX_OBJECT_COUNT),
+        ('meshes', Mesh * MAX_OBJECT_COUNT),
+        ('asteroids', AsteroidArray),
+        ('shots', AsteroidArray),
     )
 
 

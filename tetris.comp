@@ -9,6 +9,7 @@ layout (constant_id = 3) const uint MAX_ATTRIBUTES = 1000;
 
 const uint MESH_COUNT = 21;
 const uint MAX_ASTEROID = 20;
+const uint MAX_SHOT = 20;
 
 struct VkDrawIndexedIndirectCommand {
     uint indexCount;
@@ -42,7 +43,22 @@ struct Mesh {
 
 struct Asteroid {
     uint life;
+    uint index;
     float radius;
+};
+
+struct Shot {
+    uint index;
+};
+
+struct AsteroidArray {
+    uint count;
+    Asteroid asteroids[MAX_ASTEROID];
+};
+
+struct ShotArray {
+    uint count;
+    Shot shots[MAX_SHOT];
 };
 
 const mat4 IDENTITY = mat4(
@@ -69,13 +85,17 @@ layout (std430, set=0, binding=3) buffer Attributes {
 } attributes;
 
 layout (std430, set=0, binding=4) buffer GameData {
+    uint currentLevel;
+
+    uint asteroidMeshIndex;
+    uint asteroidMeshCount;
+    uint padding;
+
     GameObject objects[MAX_OBJECT_COUNT];
     Mesh meshes[MESH_COUNT];
-    Asteroid asteroids[MAX_ASTEROID];
-    uint activeAsteroidCount;
-    uint currentLevel;
-    uint asteroidMeshIndex;
-    uint asteroidCount;
+    
+    AsteroidArray asteroids;
+    ShotArray shots;
 } game;
 
 layout (std430, set=0, binding=5) buffer GameState {
@@ -95,6 +115,24 @@ float hash11(float p)
     p *= p + 19.19;
     p *= p + p;
     return fract(p);
+}
+
+void pushArray(Asteroid obj) {
+    uint count = game.asteroids.count;
+    if (count == MAX_ASTEROID) {
+        return;
+    }
+
+    game.asteroids.asteroids[count] = obj;
+}
+
+void pushArray(Shot obj) {
+    uint count = game.shots.count;
+    if (count == MAX_SHOT) {
+        return;
+    }
+
+    game.shots.shots[count] = obj;
 }
 
 uint nextFreeObject() {
@@ -131,7 +169,7 @@ void removeObject(uint index) {
     draw_count.value -= 1;
 }
 
-void shoot(vec2 pos, float angle) {
+void shotInstance(vec2 pos, float angle) {
     const float SHOT_VELOCITY = 1.5;
 
     uint shotIndex = nextFreeObject();
@@ -145,6 +183,8 @@ void shoot(vec2 pos, float angle) {
     game.objects[shotIndex] = GameObject(IDENTITY, truePos, angle, SHOT_VELOCITY, angle, 0.0, float(state.currentTime + 1.3), shotIndex);
     draw.commands[shotIndex] = VkDrawIndexedIndirectCommand(shotMesh.indicesCount, 1, shotMesh.indicesOffset, shotMesh.vertexOffset, shotIndex);
     draw_count.value += 1;
+
+    pushArray(Shot(shotIndex));
 }
 
 void updatePlayer(double delta) {
@@ -183,7 +223,7 @@ void updatePlayer(double delta) {
 
 void playerShoot() {
     if (state.space == 1 && state.reloadTime < state.currentTime) {
-        shoot(game.objects[0].position, game.objects[0].angle);
+        shotInstance(game.objects[0].position, game.objects[0].angle);
         state.reloadTime = float(state.currentTime + 0.20);
     }
 }
@@ -293,7 +333,7 @@ void updateScore() {
 void beginNewLevel() {
     const float PI = 3.1415926535897932384626433832795;
 
-    if (game.activeAsteroidCount != 0) {
+    if (game.asteroids.count != 0) {
         return;
     }
 
@@ -306,7 +346,7 @@ void beginNewLevel() {
     for (uint i = 0; i < nextCount; i++) {
         rando = hash11(rando + i + ftime);
 
-        meshIndex = uint(hash11(rando));
+        meshIndex = uint(hash11(rando)  * float(game.asteroidMeshCount-1));
         meshIndex = game.asteroidMeshIndex + meshIndex;
         Mesh mesh = game.meshes[meshIndex];
 
@@ -315,16 +355,16 @@ void beginNewLevel() {
             continue;
         }
 
-        x = hash11(rando + i + 19.9);
-        y = hash11(rando + i + 9.19);
-        a = hash11(rando + i + 987.129) * (2*PI);
+        x = (hash11(rando + i + 19.9) - 0.5) * 2;
+        y = (hash11(rando + i + 9.19) - 0.5) * 2;
+        a = hash11(rando + i * + 97.129) * (2*PI);
 
         game.objects[index] = GameObject(
             IDENTITY,
             vec2(x, y),                    // pos
-            a, vel,                       // angle / vel
+            a, vel,                        // angle / vel
             a, PI,                         // display angle / display angle velocity
-            0.0,                          // lifetime
+            0.0,                           // lifetime
             index
         );
 
@@ -333,12 +373,18 @@ void beginNewLevel() {
             mesh.indicesOffset, mesh.vertexOffset,
             index
         );
+
+        pushArray(Asteroid(1, index, 0.11));
         
         draw_count.value += 1;
     }
 
-    game.activeAsteroidCount = nextCount;
+    game.asteroids.count = nextCount;
     game.currentLevel += 1;
+}
+
+void collisions() {
+
 }
 
 void main() {
@@ -346,6 +392,8 @@ void main() {
 
     beginNewLevel();
     
+    collisions();
+
     updatePlayer(delta);
     playerShoot();
     

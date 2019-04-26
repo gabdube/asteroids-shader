@@ -9,6 +9,7 @@ layout (constant_id = 3) const uint MAX_ATTRIBUTES = 1000;
 
 const uint MESH_COUNT = 21;
 const uint MAX_ASTEROID = 20;
+const uint MAX_SHOT = 20;
 
 struct VkDrawIndexedIndirectCommand {
     uint indexCount;
@@ -45,6 +46,20 @@ struct Asteroid {
     float radius;
 };
 
+struct Shot {
+    uint index;
+};
+
+struct AsteroidArray {
+    uint count;
+    Asteroid asteroids[MAX_ASTEROID];
+};
+
+struct ShotArray {
+    uint count;
+    Shot shots[MAX_SHOT];
+};
+
 layout (std430, set=0, binding=0) buffer DrawCommands {
     VkDrawIndexedIndirectCommand commands[MAX_OBJECT_COUNT];
 } draw;
@@ -62,13 +77,15 @@ layout (std430, set=0, binding=3) buffer Attributes {
 } attributes;
 
 layout (std430, set=0, binding=4) buffer GameData {
+    uint currentLevel;
+
+    uint asteroidMeshIndex;
+    uint asteroidMeshCount;
+
     GameObject objects[MAX_OBJECT_COUNT];
     Mesh meshes[MESH_COUNT];
-    Asteroid asteroids[MAX_ASTEROID];
-    uint activeAsteroidCount;
-    uint currentLevel;
-    uint asteroidMeshIndex;
-    uint asteroidCount;
+    AsteroidArray asteroids;
+    ShotArray shots;
 } game;
 
 layout (std430, set=0, binding=5) buffer GameState {
@@ -258,7 +275,7 @@ void initAsteroids() {
 
     uint asteroidCount = MESH_COUNT - BASE_MESH_INDEX;
     game.asteroidMeshIndex = BASE_MESH_INDEX;
-    game.asteroidCount = asteroidCount;
+    game.asteroidMeshCount = asteroidCount;
 
     Mesh lastMesh = game.meshes[11];
     uint indicesBaseOffset = lastMesh.indicesOffset + lastMesh.indicesCount;
@@ -272,7 +289,7 @@ void initAsteroids() {
 
         // Generate vertex
         for (uint j = 0; j < POINT_COUNT_PER_OBJECT; j++) {
-            lastDist = dist = hash11Min(float(i+j), 0.5) * 0.09;
+            lastDist = dist = hash11Min(float(i+j), 0.5) * 0.11;
 
             indices.values[indicesBaseOffset+j] = j;
             attributes.values[positionsBaseOffset+j] = vec4(dist * cos(radValue), dist * sin(radValue), 0.0, 1.0);
@@ -302,6 +319,11 @@ void main() {
     initScoreMeshes();
     initScore();
     initAsteroids();
+
+    game.asteroids.count = 0;
+    game.shots.count = 0;
+    game.currentLevel = 0;
+
     state.pastTime = state.currentTime;
     state.reloadTime = float(state.currentTime);
 }
