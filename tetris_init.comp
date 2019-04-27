@@ -47,7 +47,7 @@ struct Asteroid {
 };
 
 struct Shot {
-    uint index;
+    uint objectIndex;
     float lifetime;
 };
 

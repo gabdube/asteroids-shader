@@ -48,7 +48,7 @@ struct Asteroid {
 };
 
 struct Shot {
-    uint index;
+    uint objectIndex;
     float lifetime;
 };
 
@@ -131,7 +131,7 @@ bool pushArray(Asteroid obj) {
 
 bool pushArray(Shot obj) {
     uint count = game.shots.count;
-    if (count >= MAX_SHOT) {
+    if (count == MAX_SHOT) {
         return false;
     }
 
@@ -146,32 +146,6 @@ uint nextFreeObject() {
     } else {
         return draw_count.value;
     }
-}
-
-void removeObject(uint index) {
-    uint lastIndex = draw_count.value - 1;
-    uint lastCommandIndex = game.objects[lastIndex].commandIndex;
-
-    // Move the last object at the place of the removed object to keep things packed.
-    if (index != lastIndex) {
-        GameObject lastObj = game.objects[lastIndex];
-        VkDrawIndexedIndirectCommand lastCmd = draw.commands[lastObj.commandIndex];
-
-        GameObject obj = game.objects[index];
-        VkDrawIndexedIndirectCommand cmd = draw.commands[obj.commandIndex];
-
-        lastObj.commandIndex = obj.commandIndex;
-        lastCmd.firstInstance = cmd.firstInstance;
-
-        game.objects[index] = lastObj;
-        draw.commands[obj.commandIndex] = lastCmd;
-    }
-
-    // Disable the last object
-    game.objects[lastIndex].commandIndex = 0;
-    draw.commands[lastCommandIndex].indexCount = 0;
-
-    draw_count.value -= 1;
 }
 
 void instanceShot(vec2 pos, float angle) {
@@ -195,7 +169,6 @@ void instanceShot(vec2 pos, float angle) {
     draw.commands[shotIndex] = VkDrawIndexedIndirectCommand(shotMesh.indicesCount, 1, shotMesh.indicesOffset, shotMesh.vertexOffset, shotIndex);
     draw_count.value += 1;
 }
-
 
 void beginNewLevel() {
     const float PI = 3.1415926535897932384626433832795;
@@ -271,82 +244,79 @@ void updatePlayer(double delta) {
         pos.y -= timeStep * cos(angle);
     }
 
-    if (pos.x > 1.05) { pos.x = -1.02;}
-    else if (pos.x < -1.05) { pos.x = 1.02; }
+    if (state.space == 1 && state.reloadTime < state.currentTime) {
+        instanceShot(pos, angle);
+        state.reloadTime = float(state.currentTime + 0.20);
+    }
 
-    if (pos.y > 1.05) { pos.y = -1.02; } 
-    else if (pos.y < -1.05) { pos.y = 1.02; }
-    
-    player.matrix = mat4(
-        vec4(cos(angle), -sin(angle), 0.0, 0.0),
-        vec4(sin(angle), cos(angle), 0.0, 0.0),
-        vec4(0.0, 0.0, 1.0, 0.0),
-        vec4(pos.x, pos.y, 0.0, 1.0)
-    );
     player.angle = angle;
+    player.displayAngle = angle;
     player.position = pos;
     game.objects[0] = player;
 }
 
-void playerShoot() {
-    if (state.space == 1 && state.reloadTime < state.currentTime) {
-        instanceShot(game.objects[0].position, game.objects[0].angle);
-        state.reloadTime = float(state.currentTime + 0.20);
+void updateObjects(double delta) {
+    float timeStep = float(delta / 2.0);
+
+    uint index = 0, objectsCount = draw_count.value;
+    float vel, angle, dAngle, dVel, dVelStep;
+    vec2 pos, rot1, rot2;
+    GameObject obj;
+    Shot shot;
+
+    while (index < objectsCount) {
+        obj = game.objects[index];
+        vel = obj.velocity;
+        angle = obj.angle;
+
+        dAngle = obj.displayAngle;
+        dVel = obj.displayAngleUpdate;
+
+        // Velocity
+        pos = obj.position;
+        pos.x -= (timeStep * sin(angle)) * vel;
+        pos.y -= (timeStep * cos(angle)) * vel;
+
+        // Angular velocity
+        dAngle += timeStep * dVel;
+        rot1 = vec2( cos(dAngle), -sin(dAngle) );
+        rot2 = vec2( sin(dAngle),  cos(dAngle) );
+
+        // Edge teleport
+        if (pos.x > 1.1) { pos.x = -1.05;}
+        else if (pos.x < -1.1) { pos.x = 1.05; }
+
+        if (pos.y > 1.1) { pos.y = -1.05; } 
+        else if (pos.y < -1.1) { pos.y = 1.05; }
+
+        // Saving
+        game.objects[index].matrix[0].xy = rot1;
+        game.objects[index].matrix[1].xy = rot2;
+        game.objects[index].matrix[3].xy = pos;
+        game.objects[index].position = pos;
+        game.objects[index].displayAngle = dAngle;
+
+        index += 1;
     }
 }
 
 void cleanObjects() {
+    float currentTime = float(state.currentTime);
     uint index = 0;
-    float cTime = float(state.currentTime);
-}
+    Shot shot;
 
-void updateObjects(double delta) {
-    uint index = 0;
-    uint updatedCount = 0;
-    uint objectsCount = draw_count.value;
-    float timeStep = float(delta / 2.0);
-
-    float vel, angle, dAngle, dVel, dVelStep;
-    vec2 pos, rot1, rot2;
-    GameObject obj;
-
-    while (updatedCount < objectsCount && index < MAX_OBJECT_COUNT) {
-        if (game.objects[index].commandIndex != 0) {
-            obj = game.objects[index];
-            vel = obj.velocity;
-            angle = obj.angle;
-
-            dAngle = obj.displayAngle;
-            dVel = obj.displayAngleUpdate;
-
-            // Velocity
-            pos = obj.position;
-            pos.x -= (timeStep * sin(angle)) * vel;
-            pos.y -= (timeStep * cos(angle)) * vel;
-
-            // Angular velocity
-            dAngle += timeStep * dVel;
-            rot1 = vec2( cos(dAngle), -sin(dAngle) );
-            rot2 = vec2( sin(dAngle),  cos(dAngle) );
-
-            // Edge teleport
-            if (pos.x > 1.05) { pos.x = -1.02;}
-            else if (pos.x < -1.05) { pos.x = 1.02; }
-
-            if (pos.y > 1.05) { pos.y = -1.02; } 
-            else if (pos.y < -1.05) { pos.y = 1.02; }
-
-            // Saving
-            game.objects[index].matrix[0].xy = rot1;
-            game.objects[index].matrix[1].xy = rot2;
-            game.objects[index].matrix[3].xy = pos;
-            game.objects[index].position = pos;
-            game.objects[index].displayAngle = dAngle;
-            updatedCount += 1;
+    // Shot lifetime
+    while (index < game.shots.count) {
+        shot = game.shots.shots[index];
+        if (shot.lifetime < currentTime) {
+            game.objects[shot.objectIndex].toBeRemoved = 1;
+            game.shots.shots[index] = game.shots.shots[game.shots.count];
+            game.shots.count -= 1;
+        } else {
+            index += 1;
         }
-
-        index += 1;
     }
+
 }
 
 uint updateScoreNumber(uint n, uint scoreIndex) {
@@ -397,10 +367,9 @@ void main() {
     collisions();
 
     updatePlayer(delta);
-    playerShoot();
     
-    cleanObjects();
     updateObjects(delta);
+    cleanObjects();
 
     updateScore();
     
