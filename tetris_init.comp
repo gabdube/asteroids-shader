@@ -29,7 +29,7 @@ struct GameObject {
     float displayAngle;
     float displayAngleUpdate;
 
-    float lifetime;
+    uint toBeRemoved;
 
     uint commandIndex;
 };
@@ -48,6 +48,7 @@ struct Asteroid {
 
 struct Shot {
     uint index;
+    float lifetime;
 };
 
 struct AsteroidArray {
@@ -149,7 +150,7 @@ void initPlayer() {
         vec2(0.0, 0.0),         // pos
         0.0, 0.0,               // angle / vel
         0.0, 0.0,               // display angle / display angle vel
-        0.0,                    // lifetime
+        0,                      // remove flags
         0
     );
 } 
@@ -260,7 +261,7 @@ void initScore() {
 
     for (uint i = 0; i < MAX_SCORE_NUMBERS; i++) {
         index = baseObjectIndex+i;
-        game.objects[index] = GameObject(IDENTITY, pos, 0.0, 0.0, 0.0, 0.0, 0.0, index);
+        game.objects[index] = GameObject(IDENTITY, pos, 0.0, 0.0, 0.0, 0.0, 0, index);
         draw.commands[index] = VkDrawIndexedIndirectCommand(zeroMesh.indicesCount, 1, zeroMesh.indicesOffset, zeroMesh.vertexOffset, index);
         
         pos.x += 0.05;

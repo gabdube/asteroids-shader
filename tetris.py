@@ -1859,7 +1859,7 @@ class GameObject(Structure):
         ('velocity', c_float),
         ('display_angle', c_float),
         ('display_angle_update', c_float),
-        ('lifetime', c_float),
+        ('to_be_removed', c_uint32),
         ('command_index', c_uint32)
     )
 
@@ -1887,10 +1887,17 @@ class AsteroidArray(Structure):
         ('asteroids', Asteroid * MAX_ASTEROID),
     ) 
 
+
+class Shot(Structure):
+    _fields_ = (
+        ('index', c_uint32),
+        ('lifetime', c_float),
+    ) 
+
 class ShotArray(Structure):
     _fields_ = (
         ('count', c_uint32),
-        ('shots', c_uint32 * MAX_SHOT),
+        ('shots', Shot * MAX_SHOT),
     ) 
 
 
