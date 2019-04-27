@@ -28,10 +28,6 @@ struct GameObject {
     
     float displayAngle;
     float displayAngleUpdate;
-
-    uint toBeRemoved;
-
-    uint commandIndex;
 };
 
 struct Mesh {
@@ -163,7 +159,7 @@ void instanceShot(vec2 pos, float angle) {
 
     // Spawn the shot just in front of the player
     vec2 relativePos = vec2(pos.x + (sin(angle) * -0.05), pos.y + (cos(angle) * -0.05));
-    game.objects[shotIndex] = GameObject(IDENTITY, relativePos, angle, SHOT_VELOCITY, angle, 0.0, 0, shotIndex);
+    game.objects[shotIndex] = GameObject(IDENTITY, relativePos, angle, SHOT_VELOCITY, angle, 0.0);
 
     Mesh shotMesh = game.meshes[1];
     draw.commands[shotIndex] = VkDrawIndexedIndirectCommand(shotMesh.indicesCount, 1, shotMesh.indicesOffset, shotMesh.vertexOffset, shotIndex);
@@ -203,9 +199,7 @@ void beginNewLevel() {
             IDENTITY,
             vec2(x, y),                    // pos
             a, vel,                        // angle / vel
-            a, PI,                         // display angle / display angle velocity
-            0,                             // lifetime
-            index
+            a, PI                          // display angle / display angle velocity
         );
 
         draw.commands[index] = VkDrawIndexedIndirectCommand(
@@ -302,15 +296,26 @@ void updateObjects(double delta) {
 
 void cleanObjects() {
     float currentTime = float(state.currentTime);
-    uint index = 0;
+    uint index = 0, lastObjectIndex;
     Shot shot;
 
     // Shot lifetime
     while (index < game.shots.count) {
         shot = game.shots.shots[index];
         if (shot.lifetime < currentTime) {
-            game.objects[shot.objectIndex].toBeRemoved = 1;
-            game.shots.shots[index] = game.shots.shots[game.shots.count];
+            lastObjectIndex = draw_count.value - 1;
+
+            // Swap remove the current object
+            game.objects[shot.objectIndex] = game.objects[lastObjectIndex];
+
+            // Update the draw commands to point at the good object
+            draw.commands[shot.objectIndex] = draw.commands[lastObjectIndex];
+            draw.commands[shot.objectIndex].firstInstance = shot.objectIndex;
+
+            // Swap remove the current shot object
+            game.shots.shots[index].lifetime = game.shots.shots[game.shots.count - 1].lifetime;
+
+            draw_count.value -= 1;
             game.shots.count -= 1;
         } else {
             index += 1;

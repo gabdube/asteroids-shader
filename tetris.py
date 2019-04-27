@@ -1859,8 +1859,7 @@ class GameObject(Structure):
         ('velocity', c_float),
         ('display_angle', c_float),
         ('display_angle_update', c_float),
-        ('to_be_removed', c_uint32),
-        ('command_index', c_uint32)
+        ('padding', c_uint32*2)
     )
 
 

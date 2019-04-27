@@ -28,10 +28,6 @@ struct GameObject {
     
     float displayAngle;
     float displayAngleUpdate;
-
-    uint toBeRemoved;
-
-    uint commandIndex;
 };
 
 struct Mesh {
@@ -149,9 +145,7 @@ void initPlayer() {
         IDENTITY,
         vec2(0.0, 0.0),         // pos
         0.0, 0.0,               // angle / vel
-        0.0, 0.0,               // display angle / display angle vel
-        0,                      // remove flags
-        0
+        0.0, 0.0                // display angle / display angle vel
     );
 } 
 
@@ -261,7 +255,7 @@ void initScore() {
 
     for (uint i = 0; i < MAX_SCORE_NUMBERS; i++) {
         index = baseObjectIndex+i;
-        game.objects[index] = GameObject(IDENTITY, pos, 0.0, 0.0, 0.0, 0.0, 0, index);
+        game.objects[index] = GameObject(IDENTITY, pos, 0.0, 0.0, 0.0, 0.0);
         draw.commands[index] = VkDrawIndexedIndirectCommand(zeroMesh.indicesCount, 1, zeroMesh.indicesOffset, zeroMesh.vertexOffset, index);
         
         pos.x += 0.05;
