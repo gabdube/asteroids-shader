@@ -869,24 +869,16 @@ def upload_staging(tetris, staging_buffer, buffer_regions):
 def create_buffers(tetris):
     device = tetris.device
     attr_type = array(c_float, 4)
-    DRAW_STRUCT_SIZE = sizeof(vk.DrawIndexedIndirectCommand)
 
     # VERY VERY IMPORTANT. SSBO aligment must be respected. I keep forgeting this and all my demo crash on NVdia hardware.
     storage_align = tetris.limits.min_storage_buffer_offset_alignment
 
     # Compute allocation space
-    draw_count_size = align(4, storage_align)                                           # Starts at 4 bytes for the count buffer
-    draw_info_size  = align(DRAW_STRUCT_SIZE * MAX_OBJECT_COUNT, storage_align)         # Allocate space for the indirect draw commands
     attributes_size = align(sizeof(attr_type) * MAX_ATTRIBUTES_COUNT, storage_align)    # Enough to hold 1000 vertices. Should be plenty
     indices_size    = align(sizeof(c_uint16) * MAX_INDICES_COUNT, storage_align)
     game_data_size  = align(sizeof(GameData), storage_align)
 
     # Device setup
-    draw_info_buffer = create_buffer(tetris, buffer_params (
-        draw_count_size + draw_info_size,
-        vk.BUFFER_USAGE_INDIRECT_BUFFER_BIT | vk.BUFFER_USAGE_TRANSFER_DST_BIT | vk.BUFFER_USAGE_STORAGE_BUFFER_BIT
-    ))
-
     attributes_buffer = create_buffer(tetris, buffer_params (
         attributes_size + indices_size,
         vk.BUFFER_USAGE_VERTEX_BUFFER_BIT | vk.BUFFER_USAGE_INDEX_BUFFER_BIT | vk.BUFFER_USAGE_TRANSFER_DST_BIT | vk.BUFFER_USAGE_STORAGE_BUFFER_BIT
@@ -894,15 +886,12 @@ def create_buffers(tetris):
 
     game_data_buffer = create_buffer(tetris, buffer_params(
         game_data_size,
-        vk.BUFFER_USAGE_TRANSFER_DST_BIT | vk.BUFFER_USAGE_STORAGE_BUFFER_BIT
+        vk.BUFFER_USAGE_INDIRECT_BUFFER_BIT | vk.BUFFER_USAGE_TRANSFER_DST_BIT | vk.BUFFER_USAGE_STORAGE_BUFFER_BIT
     ))
 
     # Offsets
     index_offset = 0
     positions_offset = align(indices_size, storage_align)
-
-    draw_count_offset = 0
-    draw_params_offset = draw_count_size
 
     draw_data = {
         "index_offset": index_offset,
@@ -914,13 +903,16 @@ def create_buffers(tetris):
         "vertex_buffers": array(vk.Buffer, 1, (attributes_buffer,)),
         "vertex_offsets": array(vk.DeviceSize, 1, (positions_offset,)),
 
-        "draw_params_offset": draw_count_size,
-        "draw_count_offset": 0
+        "draw_params_offset": GameData.objects.offset,
+        "draw_params_stride": sizeof(GameObject),
+        "draw_count_offset": GameData.draw_count.offset
     }
+
+    print(draw_data)
 
     # Final device memory allocation
     req = vk.MemoryRequirements()
-    buffers, offsets = (draw_info_buffer, attributes_buffer, game_data_buffer), [0,0,0]
+    buffers, offsets = (attributes_buffer, game_data_buffer), [0,0]
     buffer_copy_regions = []
     current_offset = staging_alloc_size = 0
 
@@ -955,12 +947,10 @@ def create_buffers(tetris):
     print("")
     print(f"Staging alloc size: {staging_alloc_size}")
     print(f"Final alloc size: {final_info.allocation_size}")
-    print(f"Draw info buffer size: {draw_count_size + draw_info_size}")
     print(f"Attributes buffer size: {attributes_size + indices_size}")
     print(f"Game data buffer size: {game_data_size}")
 
     # Saving
-    tetris.draw_info_buffer = draw_info_buffer
     tetris.attributes_buffer = attributes_buffer
     tetris.game_data_buffer = game_data_buffer
     
@@ -1071,13 +1061,12 @@ def create_descriptor_set_layouts(tetris):
         )
 
     # Compute set layouts
-    bindings = array(vk.DescriptorSetLayoutBinding, 6, (
-        layout_binding(0),   # Draw commands
-        layout_binding(1),   # Draw count
-        layout_binding(2),   # Index
-        layout_binding(3),   # Attributes
-        layout_binding(4),   # Game data
-        layout_binding(5),   # Game State
+    bindings = array(vk.DescriptorSetLayoutBinding, 5, (
+        layout_binding(0),   # Draw count
+        layout_binding(1),   # Index
+        layout_binding(2),   # Attributes
+        layout_binding(3),   # Game data
+        layout_binding(4),   # Game State
     ))
 
     set_layout_info = vk.DescriptorSetLayoutCreateInfo(
@@ -1111,7 +1100,7 @@ def create_descriptors(tetris):
 
     # Descriptor pool
     pool_sizes = array(vk.DescriptorPoolSize, 1, (
-        vk.DescriptorPoolSize(type=vk.DESCRIPTOR_TYPE_STORAGE_BUFFER, descriptor_count=7),
+        vk.DescriptorPoolSize(type=vk.DESCRIPTOR_TYPE_STORAGE_BUFFER, descriptor_count=6),
     ))
 
     descriptor_pool_info = vk.DescriptorPoolCreateInfo(
@@ -1159,7 +1148,6 @@ def update_descriptor_sets(tetris):
         )
 
     dd = tetris.draw_data
-    draw_info_buffer = tetris.draw_info_buffer
     attributes_buffer = tetris.attributes_buffer
     game_data_buffer = tetris.game_data_buffer
     game_state_buffer = tetris.game_state_buffer
@@ -1168,33 +1156,23 @@ def update_descriptor_sets(tetris):
     render_set = tetris.render_descriptor_sets[0]
 
     # Graphics set
-    draw_commands_binding = buffer_write_set(
-        compute_set, 0,
-        vk.DescriptorBufferInfo(buffer=draw_info_buffer, offset=dd["draw_params_offset"], range=vk.WHOLE_SIZE)
-    )
-
-    draw_commands_count_binding = buffer_write_set(
-        compute_set, 1,
-        vk.DescriptorBufferInfo(buffer=draw_info_buffer, offset=dd["draw_count_offset"], range=sizeof(c_uint32))
-    )
-
     indices_binding = buffer_write_set(
-        compute_set, 2,
+        compute_set, 0,
         vk.DescriptorBufferInfo(buffer=attributes_buffer, offset=dd["index_offset"], range=dd["index_size"])
     )
 
     attributes_binding = buffer_write_set(
-        compute_set, 3,
+        compute_set, 1,
         vk.DescriptorBufferInfo(buffer=attributes_buffer, offset=dd["positions_offset"], range=dd["positions_size"])
     )
 
     game_data_binding = buffer_write_set(
-        compute_set, 4,
+        compute_set, 2,
         vk.DescriptorBufferInfo(buffer=game_data_buffer, offset=0, range=vk.WHOLE_SIZE)
     )
 
     game_state_binding = buffer_write_set(
-        compute_set, 5,
+        compute_set, 3,
         vk.DescriptorBufferInfo(buffer=game_state_buffer, offset=0, range=vk.WHOLE_SIZE)
     )
 
@@ -1205,7 +1183,7 @@ def update_descriptor_sets(tetris):
     )
 
     writes = [
-        draw_commands_binding, draw_commands_count_binding, indices_binding, attributes_binding, game_data_binding,
+        indices_binding, attributes_binding, game_data_binding,
         game_data_binding_vertex, game_state_binding
     ]
 
@@ -1585,7 +1563,7 @@ def record_draw_commands(tetris, index, cmd):
     )
     tetris.CmdDispatch(cmd, 1, 1, 1)
 
-    # Barrier to make sure the compute shader execution finished before the render pass begins
+    # Barrier to make sure the compute shader execution finish before the render pass begins
     # Not even sure I'm using this right though...
     tetris.CmdPipelineBarrier(
         cmd,
@@ -1622,10 +1600,10 @@ def record_draw_commands(tetris, index, cmd):
 
     draw(
         cmd, 
-        tetris.draw_info_buffer, draw_data["draw_params_offset"], 
-        tetris.draw_info_buffer, draw_data["draw_count_offset"],
+        tetris.game_data_buffer, draw_data["draw_params_offset"], 
+        tetris.game_data_buffer, draw_data["draw_count_offset"],
         tetris.max_obj_count,
-        sizeof(vk.DrawIndexedIndirectCommand)
+        draw_data["draw_params_stride"]
     )
 
     tetris.CmdEndRenderPass(cmd)
@@ -1804,7 +1782,6 @@ def cleanup(tetris):
 
     tetris.DestroyCommandPool(d, tetris.command_pool, None)
 
-    tetris.DestroyBuffer(d, tetris.draw_info_buffer, None)
     tetris.DestroyBuffer(d, tetris.attributes_buffer, None)
     tetris.DestroyBuffer(d, tetris.game_data_buffer, None)
     tetris.DestroyBuffer(d, tetris.game_state_buffer, None)
@@ -1853,14 +1830,14 @@ MAX_SHOT = 20
 
 class GameObject(Structure):
     _fields_ = (
-        ('matrix', c_float*16),
+        ('command', vk.DrawIndexedIndirectCommand),
+        ('status', c_uint32),
         ('position', c_float*2),
         ('angle', c_float),
         ('velocity', c_float),
         ('display_angle', c_float),
         ('display_angle_update', c_float),
-        ('deleteFlag', c_uint32),
-        ('padding', c_uint32*1)
+        ('matrix', c_float*16),
     )
 
 
@@ -1904,17 +1881,18 @@ class ShotArray(Structure):
 
 class GameData(Structure):
     _fields_ = (
-        ('current_level', c_uint32),
-        ('game_over', c_uint32),
-        ('asteroidMeshIndex', c_uint32),
-        ('asteroidMeshCount', c_uint32),
-        ('padding', c_uint32 *3),
-        ('objects', GameObject * MAX_OBJECT_COUNT),
-        ('meshes', Mesh * MAX_OBJECT_COUNT),
-        ('asteroids', AsteroidArray),
-        ('shots', AsteroidArray),
+        ('draw_count', c_uint32),                     # 0   (field offset)
+        ('current_level', c_uint32),                  # 4
+        ('game_over', c_uint32),                      # 8
+        ('score', c_uint32),                          # 12
+        ('asteroidMeshIndex', c_uint32),              # 16
+        ('asteroidMeshCount', c_uint32),              # 20
+        ('padding', c_uint32*2),
+        ('objects', GameObject * MAX_OBJECT_COUNT),   # 32
+        ('meshes', Mesh * MAX_OBJECT_COUNT),          # 7200
+        ('asteroids', AsteroidArray),                 # 7536
+        ('shots', ShotArray),                         # 7780
     )
-
 
 class GameState(Structure):
     _fields_ = (

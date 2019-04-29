@@ -11,6 +11,10 @@ const uint MESH_COUNT = 21;
 const uint MAX_ASTEROID = 20;
 const uint MAX_SHOT = 20;
 
+const uint STATUS_INACTIVE = 0;
+const uint STATUS_ACTIVE = 1;
+
+
 struct VkDrawIndexedIndirectCommand {
     uint indexCount;
     uint instanceCount;
@@ -20,7 +24,9 @@ struct VkDrawIndexedIndirectCommand {
 };
 
 struct GameObject {
-    mat4 matrix;
+    VkDrawIndexedIndirectCommand command;
+
+    uint status;
     
     vec2 position;
     float angle;
@@ -29,7 +35,7 @@ struct GameObject {
     float displayAngle;
     float displayAngleUpdate;
 
-    uint deleteFlag;
+    mat4 matrix;
 };
 
 struct Mesh {
@@ -67,23 +73,17 @@ const mat4 IDENTITY = mat4(
     vec4(0.0, 0.0, 0.0, 1.0)
 );
 
-layout (std430, set=0, binding=0) buffer DrawCommands {
-    VkDrawIndexedIndirectCommand commands[MAX_OBJECT_COUNT];
-} draw;
-
-layout (std430, set=0, binding=1) buffer DrawCommandCount {
-    uint value;
-} draw_count;
-
-layout (std430, set=0, binding=2) buffer Index {
+layout (std430, set=0, binding=0) buffer Index {
     uint values[MAX_INDICES];
 } indices;
 
-layout (std430, set=0, binding=3) buffer Attributes {
+layout (std430, set=0, binding=1) buffer Attributes {
     vec4 values[MAX_ATTRIBUTES];
 } attributes;
 
-layout (std430, set=0, binding=4) buffer GameData {
+layout (std430, set=0, binding=2) buffer GameData {
+    uint drawCount;
+
     uint currentLevel;
     uint over;
     uint score;
@@ -98,7 +98,7 @@ layout (std430, set=0, binding=4) buffer GameData {
     ShotArray shots;
 } game;
 
-layout (std430, set=0, binding=5) buffer GameState {
+layout (std430, set=0, binding=3) buffer GameState {
     double currentTime;
     double pastTime;
     uint up;
@@ -140,10 +140,10 @@ bool pushArray(Shot obj) {
 }
 
 uint nextFreeObject() {
-    if (draw_count.value == MAX_OBJECT_COUNT) {
+    if (game.drawCount == MAX_OBJECT_COUNT) {
         return 0;
     } else {
-        return draw_count.value;
+        return game.drawCount;
     }
 }
 
@@ -160,17 +160,30 @@ void instanceShot(vec2 pos, float angle) {
         return; // no more space!!!
     }
 
-    // Spawn the shot just in front of the player
-    vec2 relativePos = vec2(pos.x + (sin(angle) * -0.05), pos.y + (cos(angle) * -0.05));
-    game.objects[shotIndex] = GameObject(IDENTITY, relativePos, angle, SHOT_VELOCITY, angle, 0.0, 0);
-
+    // Object
     Mesh shotMesh = game.meshes[1];
-    draw.commands[shotIndex] = VkDrawIndexedIndirectCommand(shotMesh.indicesCount, 1, shotMesh.indicesOffset, shotMesh.vertexOffset, shotIndex);
-    draw_count.value += 1;
+    game.objects[shotIndex] = GameObject(
+        VkDrawIndexedIndirectCommand(
+            shotMesh.indicesCount,
+            1,
+            shotMesh.indicesOffset,
+            shotMesh.vertexOffset,
+            shotIndex
+        ),
+
+        STATUS_ACTIVE,
+
+        vec2(pos.x + (sin(angle) * -0.05), pos.y + (cos(angle) * -0.05)),
+        angle, SHOT_VELOCITY,
+        angle, 0.0,
+        IDENTITY
+    );    
+
+    game.drawCount += 1;
 }
 
 void beginNewLevel() {
-    const float PI = 3.1415926535897932384626433832795;
+    /*const float PI = 3.1415926535897932384626433832795;
 
     if (game.asteroids.count != 0) {
         return;
@@ -201,7 +214,7 @@ void beginNewLevel() {
 
         j = 0.0;
         do {
-            x = (hash11(rando + i + j) - 0.5) * 2;
+            x = (hash11(rando + i + j + 21.9) - 0.5) * 2;
             y = (hash11(rando + i + j + 0.19) - 0.5) * 2;
             j += 0.001;
         } while ( distance(playerPos, vec2(x, y)) < 0.15 );
@@ -225,7 +238,7 @@ void beginNewLevel() {
         draw_count.value += 1;
     }
 
-    game.currentLevel += 1;
+    game.currentLevel += 1;*/
 }
 
 void collisions() {
@@ -252,9 +265,9 @@ void collisions() {
             as = game.asteroids.asteroids[j];
             pos2 = game.objects[as.objectIndex].position; 
 
-            if (distance(pos1, pos2) < as.radius && i == 0) {
-                game.objects[shot.objectIndex].deleteFlag = 1;
-                game.objects[as.objectIndex].deleteFlag = 1;
+            if (distance(pos1, pos2) < as.radius) {
+                game.objects[shot.objectIndex].status = STATUS_INACTIVE;
+                game.objects[as.objectIndex].status = STATUS_INACTIVE;
                 game.score += (1 * game.currentLevel);
             }   
         }
@@ -263,67 +276,6 @@ void collisions() {
 }
 
 void cleanObjects() {
-    float currentTime = float(state.currentTime);
-    uint index = 0, lastObjectIndex, currentObjectIndex;
-    Shot shot;
-    Asteroid ast;
-    GameObject obj;
-
-    // Asteroids
-    while (index < game.asteroids.count) {
-        ast = game.asteroids.asteroids[index];
-        obj = game.objects[ast.objectIndex];
-
-        if (obj.deleteFlag == 1) {
-            lastObjectIndex = draw_count.value - 1;
-            currentObjectIndex = ast.objectIndex;
-
-            // Swap remove the current asteroid object
-            game.asteroids.asteroids[index] = game.asteroids.asteroids[game.asteroids.count - 1];
-            game.asteroids.asteroids[index].objectIndex = currentObjectIndex;
-
-            // Swap remove the current object
-            game.objects[currentObjectIndex] = game.objects[lastObjectIndex];
-
-            // Update the draw commands to point at the good object
-            draw.commands[currentObjectIndex] = draw.commands[lastObjectIndex];
-            draw.commands[currentObjectIndex].firstInstance = currentObjectIndex;
-
-            draw_count.value -= 1;
-            game.asteroids.count -= 1;
-        } else {
-            index += 1;
-        }
-    }
-    
-    // Shots
-    index = 0;
-    while (index < game.shots.count) {
-        shot = game.shots.shots[index];
-        obj = game.objects[shot.objectIndex];
-
-        if (shot.lifetime < currentTime || obj.deleteFlag == 1) {
-            lastObjectIndex = draw_count.value - 1;
-            currentObjectIndex = shot.objectIndex;
-
-            // Swap remove the current shot object
-            game.shots.shots[index] = game.shots.shots[game.shots.count - 1];
-            game.shots.shots[index].objectIndex = currentObjectIndex;
-            
-            // Swap remove the current object
-            game.objects[currentObjectIndex] = game.objects[lastObjectIndex];
-
-            // Update the draw commands to point at the good object
-            draw.commands[currentObjectIndex] = draw.commands[lastObjectIndex];
-            draw.commands[currentObjectIndex].firstInstance = currentObjectIndex;
-
-            draw_count.value -= 1;
-            game.shots.count -= 1;
-        } else {
-            index += 1;
-        }
-    }
-
 }
 
 void updatePlayer(double delta) {
@@ -357,13 +309,13 @@ void updatePlayer(double delta) {
 void updateObjects(double delta) {
     float timeStep = float(delta / 2.0);
 
-    uint index = 0, objectsCount = draw_count.value;
+    uint index = 0;
     float vel, angle, dAngle, dVel, dVelStep;
     vec2 pos, rot1, rot2;
     GameObject obj;
     Shot shot;
 
-    while (index < objectsCount) {
+    while (index < game.drawCount) {
         obj = game.objects[index];
         vel = obj.velocity;
         angle = obj.angle;
@@ -409,21 +361,23 @@ void gameOver() {
     // Flag all asteroids and shots for removal
     for (uint i = 0; i < game.asteroids.count; i++) {
         objIndex = game.asteroids.asteroids[i].objectIndex;
-        game.objects[objIndex].deleteFlag = 1;
+        game.objects[objIndex].status = STATUS_INACTIVE;
     }
 
     for (uint i = 0; i < game.shots.count; i++) {
         objIndex = game.shots.shots[i].objectIndex;
-        game.objects[objIndex].deleteFlag = 1;
+        game.objects[objIndex].status = STATUS_INACTIVE;
     }
 
     // Reset the player
+    VkDrawIndexedIndirectCommand playerDrawInfo = game.objects[0].command;
     game.objects[0] = GameObject(
-        IDENTITY,
+        playerDrawInfo,
+        STATUS_ACTIVE,
         vec2(0.0, 0.0),
         0.0, 0.0,
         0.0, 0.0,
-        0
+        IDENTITY
     );
 
     game.currentLevel = 0;
@@ -432,12 +386,12 @@ void gameOver() {
 }
 
 uint updateScoreNumber(uint n, uint scoreIndex) {
-    const uint BASE_NUMBER_MESH_INDEX = 2;
-    const uint BASE_SCORE_OBJ_INDEX = 1;
+    const uint BASE_NUMBER_MESH_INDEX = 2;                      // 0 is player, 1 is the shot
+    const uint BASE_SCORE_OBJ_INDEX = 1;                        // 0 is player, 1|2|3|4 are the four numbers
     uint scoreObjIndex = BASE_SCORE_OBJ_INDEX+scoreIndex;
 
     Mesh newMesh = game.meshes[BASE_NUMBER_MESH_INDEX + n];
-    draw.commands[scoreObjIndex] = VkDrawIndexedIndirectCommand(
+    game.objects[scoreObjIndex].command = VkDrawIndexedIndirectCommand(
         newMesh.indicesCount, 1,
         newMesh.indicesOffset, newMesh.vertexOffset,
         scoreObjIndex
@@ -474,18 +428,16 @@ void updateScore() {
 void main() {
     double delta = state.currentTime - state.pastTime;
 
+    gameOver();
     beginNewLevel();
 
-    updatePlayer(delta);
-
     collisions();
-    cleanObjects();
 
+    updatePlayer(delta);
     updateObjects(delta);
-
-    gameOver();
-    
     updateScore();
+
+    cleanObjects();
     
     state.pastTime = state.currentTime;
 }

@@ -11,6 +11,9 @@ const uint MESH_COUNT = 21;
 const uint MAX_ASTEROID = 20;
 const uint MAX_SHOT = 20;
 
+// const uint STATUS_INACTIVE = 0;
+const uint STATUS_ACTIVE = 1;
+
 struct VkDrawIndexedIndirectCommand {
     uint indexCount;
     uint instanceCount;
@@ -20,7 +23,9 @@ struct VkDrawIndexedIndirectCommand {
 };
 
 struct GameObject {
-    mat4 matrix;
+    VkDrawIndexedIndirectCommand command;
+
+    uint status;
 
     vec2 position;
     float angle;
@@ -28,7 +33,8 @@ struct GameObject {
     
     float displayAngle;
     float displayAngleUpdate;
-    uint deleteFlag;
+
+    mat4 matrix;
 };
 
 struct Mesh {
@@ -59,23 +65,17 @@ struct ShotArray {
     Shot shots[MAX_SHOT];
 };
 
-layout (std430, set=0, binding=0) buffer DrawCommands {
-    VkDrawIndexedIndirectCommand commands[MAX_OBJECT_COUNT];
-} draw;
-
-layout (std430, set=0, binding=1) buffer DrawCommandCount {
-    uint value;
-} draw_count;
-
-layout (std430, set=0, binding=2) buffer Index {
+layout (std430, set=0, binding=0) buffer Index {
     uint values[MAX_INDICES];
 } indices;
 
-layout (std430, set=0, binding=3) buffer Attributes {
+layout (std430, set=0, binding=1) buffer Attributes {
     vec4 values[MAX_ATTRIBUTES];
 } attributes;
 
-layout (std430, set=0, binding=4) buffer GameData {
+layout (std430, set=0, binding=2) buffer GameData {
+    uint drawCount; 
+
     uint currentLevel;
     uint over;
     uint score;
@@ -89,7 +89,7 @@ layout (std430, set=0, binding=4) buffer GameData {
     ShotArray shots;
 } game;
 
-layout (std430, set=0, binding=5) buffer GameState {
+layout (std430, set=0, binding=3) buffer GameState {
     double currentTime;
     double pastTime;
     uint up;
@@ -141,17 +141,27 @@ void initPlayer() {
         attributes.values[i] = vec4(POSITIONS[i], 0.0, 1.0);
     }
 
-    game.meshes[0] = Mesh(0, PINDICES.length(), 0, POSITIONS.length());
+    // Mesh
+    Mesh playerMesh = Mesh(0, PINDICES.length(), 0, POSITIONS.length());
+    game.meshes[0] = playerMesh;
 
-    draw_count.value = 1;
-    draw.commands[0] = VkDrawIndexedIndirectCommand(PINDICES.length(), 1, 0, 0, 0);
-    game.objects[0] = GameObject(
-        IDENTITY,
+    // Object
+    game.objects[game.drawCount] = GameObject(
+        VkDrawIndexedIndirectCommand(
+            playerMesh.indicesCount,
+            1,
+            playerMesh.indicesOffset,
+            playerMesh.vertexOffset,
+            0
+        ),
+        STATUS_ACTIVE,
         vec2(0.0, 0.0),         // pos
         0.0, 0.0,               // angle / vel
         0.0, 0.0,               // display angle / display angle vel
-        0
+        IDENTITY
     );
+
+    game.drawCount += 1;
 } 
 
 void initShotMesh() {
@@ -254,17 +264,26 @@ void initScore() {
     const uint MAX_SCORE_NUMBERS = 4;
 
     Mesh zeroMesh = game.meshes[2];
-    uint baseObjectIndex = draw_count.value;
-    uint index;
     vec2 pos = vec2(-0.95, -0.95);
 
     for (uint i = 0; i < MAX_SCORE_NUMBERS; i++) {
-        index = baseObjectIndex+i;
-        game.objects[index] = GameObject(IDENTITY, pos, 0.0, 0.0, 0.0, 0.0, 0);
-        draw.commands[index] = VkDrawIndexedIndirectCommand(zeroMesh.indicesCount, 1, zeroMesh.indicesOffset, zeroMesh.vertexOffset, index);
+        game.objects[game.drawCount] = GameObject(
+            VkDrawIndexedIndirectCommand(
+                zeroMesh.indicesCount,
+                1,
+                zeroMesh.indicesOffset,
+                zeroMesh.vertexOffset,
+                game.drawCount
+            ),
+            STATUS_ACTIVE,
+            pos,
+            0.0, 0.0,
+            0.0, 0.0,
+            IDENTITY
+        );
         
         pos.x += 0.05;
-        draw_count.value += 1;
+        game.drawCount += 1;
     }
 }
 

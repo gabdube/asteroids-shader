@@ -7,8 +7,22 @@ layout (constant_id = 1) const uint MAX_OBJECT_COUNT = 64;
 
 layout (location = 0) in vec4 inPos;
 
+const uint MESH_COUNT = 21;
+const uint MAX_ASTEROID = 20;
+const uint MAX_SHOT = 20;
+
+struct VkDrawIndexedIndirectCommand {
+    uint indexCount;
+    uint instanceCount;
+    uint firstIndex;
+    uint vertexOffset;
+    uint firstInstance;
+};
+
 struct GameObject {
-    mat4 matrix;
+    VkDrawIndexedIndirectCommand command;
+
+    uint status;
     
     vec2 position;
     float angle;
@@ -17,10 +31,40 @@ struct GameObject {
     float displayAngle;
     float displayAngleUpdate;
 
-    uint deleteFlag;
+    mat4 matrix;
+};
+
+struct Mesh {
+    uint indicesOffset;
+    uint indicesCount;
+    uint vertexOffset;
+    uint vertexCount;
+};
+
+struct Asteroid {
+    uint objectIndex;
+    uint life;
+    float radius;
+};
+
+struct AsteroidArray {
+    uint count;
+    Asteroid asteroids[MAX_ASTEROID];
+};
+
+struct Shot {
+    uint objectIndex;
+    float lifetime;
+};
+
+struct ShotArray {
+    uint count;
+    Shot shots[MAX_SHOT];
 };
 
 layout (std430, set=0, binding=0) readonly buffer GameData {
+    uint drawCount; 
+
     uint currentLevel;
     uint over;
     uint score;
@@ -29,6 +73,9 @@ layout (std430, set=0, binding=0) readonly buffer GameData {
     uint asteroidMeshCount;
 
     GameObject objects[MAX_OBJECT_COUNT];
+    Mesh meshes[MESH_COUNT];
+    AsteroidArray asteroids;
+    ShotArray shots;
 } game;
 
 void main() 
