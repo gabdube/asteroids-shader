@@ -1859,7 +1859,8 @@ class GameObject(Structure):
         ('velocity', c_float),
         ('display_angle', c_float),
         ('display_angle_update', c_float),
-        ('padding', c_uint32*2)
+        ('deleteFlag', c_uint32),
+        ('padding', c_uint32*1)
     )
 
 
@@ -1893,6 +1894,7 @@ class Shot(Structure):
         ('lifetime', c_float),
     ) 
 
+
 class ShotArray(Structure):
     _fields_ = (
         ('count', c_uint32),
@@ -1903,8 +1905,10 @@ class ShotArray(Structure):
 class GameData(Structure):
     _fields_ = (
         ('current_level', c_uint32),
+        ('game_over', c_uint32),
         ('asteroidMeshIndex', c_uint32),
         ('asteroidMeshCount', c_uint32),
+        ('padding', c_uint32 *3),
         ('objects', GameObject * MAX_OBJECT_COUNT),
         ('meshes', Mesh * MAX_OBJECT_COUNT),
         ('asteroids', AsteroidArray),

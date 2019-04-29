@@ -17,17 +17,16 @@ struct GameObject {
     float displayAngle;
     float displayAngleUpdate;
 
-    float lifetime;
-
-    uint commandIndex;
+    uint deleteFlag;
 };
 
 layout (std430, set=0, binding=0) readonly buffer GameData {
     uint currentLevel;
+    uint over;
+    uint score;
 
     uint asteroidMeshIndex;
     uint asteroidMeshCount;
-    uint padding;
 
     GameObject objects[MAX_OBJECT_COUNT];
 } game;

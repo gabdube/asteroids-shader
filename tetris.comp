@@ -28,6 +28,8 @@ struct GameObject {
     
     float displayAngle;
     float displayAngleUpdate;
+
+    uint deleteFlag;
 };
 
 struct Mesh {
@@ -39,18 +41,18 @@ struct Mesh {
 
 struct Asteroid {
     uint life;
-    uint index;
-    float radius;
-};
-
-struct Shot {
     uint objectIndex;
-    float lifetime;
+    float radius;
 };
 
 struct AsteroidArray {
     uint count;
     Asteroid asteroids[MAX_ASTEROID];
+};
+
+struct Shot {
+    uint objectIndex;
+    float lifetime;
 };
 
 struct ShotArray {
@@ -83,10 +85,11 @@ layout (std430, set=0, binding=3) buffer Attributes {
 
 layout (std430, set=0, binding=4) buffer GameData {
     uint currentLevel;
+    uint over;
+    uint score;
 
     uint asteroidMeshIndex;
     uint asteroidMeshCount;
-    uint padding;
 
     GameObject objects[MAX_OBJECT_COUNT];
     Mesh meshes[MESH_COUNT];
@@ -159,7 +162,7 @@ void instanceShot(vec2 pos, float angle) {
 
     // Spawn the shot just in front of the player
     vec2 relativePos = vec2(pos.x + (sin(angle) * -0.05), pos.y + (cos(angle) * -0.05));
-    game.objects[shotIndex] = GameObject(IDENTITY, relativePos, angle, SHOT_VELOCITY, angle, 0.0);
+    game.objects[shotIndex] = GameObject(IDENTITY, relativePos, angle, SHOT_VELOCITY, angle, 0.0, 0);
 
     Mesh shotMesh = game.meshes[1];
     draw.commands[shotIndex] = VkDrawIndexedIndirectCommand(shotMesh.indicesCount, 1, shotMesh.indicesOffset, shotMesh.vertexOffset, shotIndex);
@@ -174,32 +177,43 @@ void beginNewLevel() {
     }
 
     float ftime = float(state.currentTime);
-    float x, y, a;
+    float x, y, a, j;
     float vel = 0.5 + (0.1*float(game.currentLevel));
     uint index, meshIndex, nextCount = game.currentLevel + 5;
     float rando = 0.0;
+    vec2 playerPos = game.objects[0].position;
 
     for (uint i = 0; i < nextCount; i++) {
+        index = nextFreeObject();
+        if (index == 0) {
+            continue;
+        }
+
+        if (!pushArray(Asteroid(1, index, 0.11))) {
+            continue;
+        }
+
         rando = hash11(rando + i + ftime);
 
         meshIndex = uint(hash11(rando)  * float(game.asteroidMeshCount-1));
         meshIndex = game.asteroidMeshIndex + meshIndex;
         Mesh mesh = game.meshes[meshIndex];
 
-        index = nextFreeObject();
-        if (index == 0) {
-            continue;
-        }
-
-        x = (hash11(rando + i + 19.9) - 0.5) * 2;
-        y = (hash11(rando + i + 9.19) - 0.5) * 2;
+        j = 0.0;
+        do {
+            x = (hash11(rando + i + j) - 0.5) * 2;
+            y = (hash11(rando + i + j + 0.19) - 0.5) * 2;
+            j += 0.001;
+        } while ( distance(playerPos, vec2(x, y)) < 0.15 );
+        
         a = hash11(rando + i * + 97.129) * (2*PI);
 
         game.objects[index] = GameObject(
             IDENTITY,
             vec2(x, y),                    // pos
             a, vel,                        // angle / vel
-            a, PI                          // display angle / display angle velocity
+            a, PI,                         // display angle / display angle velocity
+            0
         );
 
         draw.commands[index] = VkDrawIndexedIndirectCommand(
@@ -207,17 +221,101 @@ void beginNewLevel() {
             mesh.indicesOffset, mesh.vertexOffset,
             index
         );
-
-        pushArray(Asteroid(1, index, 0.11));
         
         draw_count.value += 1;
     }
 
-    game.asteroids.count = nextCount;
     game.currentLevel += 1;
 }
 
 void collisions() {
+    vec2 pos1, pos2, playerPos = game.objects[0].position;
+    Asteroid as;
+    Shot shot;
+
+    for (uint i=0; i < game.asteroids.count; i++) {
+        as = game.asteroids.asteroids[i];
+        pos1 = game.objects[as.objectIndex].position;
+
+        // Player collision
+        if (distance(playerPos, pos1) < as.radius) {
+            game.over = 1;
+            break;
+        }
+
+        // Shot collisions
+        for (uint j=0; j < game.shots.count; j++) {
+            shot = game.shots.shots[j];
+            pos2 = game.objects[shot.objectIndex].position; 
+            
+            if (distance(pos1, pos2) < as.radius) {
+                game.objects[shot.objectIndex].deleteFlag = 1;
+                game.objects[as.objectIndex].deleteFlag = 1;
+                game.score += (1 * game.currentLevel);
+            }
+        }
+    }
+
+}
+
+void cleanObjects() {
+    float currentTime = float(state.currentTime);
+    uint index = 0, lastObjectIndex, currentObjectIndex;
+    Shot shot;
+    Asteroid ast;
+    GameObject obj;
+
+    // Shots
+    while (index < game.shots.count) {
+        shot = game.shots.shots[index];
+        obj = game.objects[shot.objectIndex];
+        if (shot.lifetime < currentTime || obj.deleteFlag == 1) {
+            lastObjectIndex = draw_count.value - 1;
+            currentObjectIndex = shot.objectIndex;
+
+            // Swap remove the current object
+            game.objects[currentObjectIndex] = game.objects[lastObjectIndex];
+
+            // Update the draw commands to point at the good object
+            draw.commands[currentObjectIndex] = draw.commands[lastObjectIndex];
+            draw.commands[currentObjectIndex].firstInstance = currentObjectIndex;
+
+            // Swap remove the current shot object
+            game.shots.shots[index].lifetime = game.shots.shots[game.shots.count - 1].lifetime;
+
+            draw_count.value -= 1;
+            game.shots.count -= 1;
+        } else {
+            index += 1;
+        }
+    }
+
+    // Asteroids
+    index = 0;
+    while (index < game.asteroids.count) {
+        ast = game.asteroids.asteroids[index];
+        obj = game.objects[ast.objectIndex];
+        if (obj.deleteFlag == 1) {
+            lastObjectIndex = draw_count.value - 1;
+            currentObjectIndex = ast.objectIndex;
+
+            // Swap remove the current object
+            game.objects[currentObjectIndex] = game.objects[lastObjectIndex];
+
+            // Update the draw commands to point at the good object
+            draw.commands[currentObjectIndex] = draw.commands[lastObjectIndex];
+            draw.commands[currentObjectIndex].firstInstance = currentObjectIndex;
+
+            // Swap remove the current asteroid object
+            game.asteroids.asteroids[index] = game.asteroids.asteroids[game.asteroids.count - 1];
+            game.asteroids.asteroids[index].objectIndex = currentObjectIndex;
+
+            draw_count.value -= 1;
+            game.asteroids.count -= 1;
+        } else {
+            index += 1;
+        }
+    }
 
 }
 
@@ -294,34 +392,36 @@ void updateObjects(double delta) {
     }
 }
 
-void cleanObjects() {
-    float currentTime = float(state.currentTime);
-    uint index = 0, lastObjectIndex;
-    Shot shot;
-
-    // Shot lifetime
-    while (index < game.shots.count) {
-        shot = game.shots.shots[index];
-        if (shot.lifetime < currentTime) {
-            lastObjectIndex = draw_count.value - 1;
-
-            // Swap remove the current object
-            game.objects[shot.objectIndex] = game.objects[lastObjectIndex];
-
-            // Update the draw commands to point at the good object
-            draw.commands[shot.objectIndex] = draw.commands[lastObjectIndex];
-            draw.commands[shot.objectIndex].firstInstance = shot.objectIndex;
-
-            // Swap remove the current shot object
-            game.shots.shots[index].lifetime = game.shots.shots[game.shots.count - 1].lifetime;
-
-            draw_count.value -= 1;
-            game.shots.count -= 1;
-        } else {
-            index += 1;
-        }
+void gameOver() {
+    if (game.over == 0) {
+        return;
     }
 
+    uint objIndex;
+
+    // Flag all asteroids and shots for removal
+    for (uint i = 0; i < game.asteroids.count; i++) {
+        objIndex = game.asteroids.asteroids[i].objectIndex;
+        game.objects[objIndex].deleteFlag = 1;
+    }
+
+    for (uint i = 0; i < game.shots.count; i++) {
+        objIndex = game.shots.shots[i].objectIndex;
+        game.objects[objIndex].deleteFlag = 1;
+    }
+
+    // Reset the player
+    game.objects[0] = GameObject(
+        IDENTITY,
+        vec2(0.0, 0.0),
+        0.0, 0.0,
+        0.0, 0.0,
+        0
+    );
+
+    game.currentLevel = 0;
+    game.score = 0;
+    game.over = 0;
 }
 
 uint updateScoreNumber(uint n, uint scoreIndex) {
@@ -340,42 +440,44 @@ uint updateScoreNumber(uint n, uint scoreIndex) {
 }
 
 void updateScore() {
-    uint intTime = uint(state.currentTime);
-    if (intTime > 9999) {
-        intTime = 9999;
+    uint score = game.score;
+    if (score > 9999) {
+        score = 9999;
     }
 
-    if (intTime >= 1000) {
-        intTime -= updateScoreNumber((intTime / 1000), 0) * 1000;
+    if (score >= 1000) {
+        score -= updateScoreNumber((score / 1000), 0) * 1000;
     }
 
-    if (intTime >= 100) {
-        intTime -= updateScoreNumber((intTime / 100), 1) * 100;
+    if (score >= 100) {
+        score -= updateScoreNumber((score / 100), 1) * 100;
     } else {
         updateScoreNumber(0, 1);
     }
 
-    if (intTime >= 10) {
-        intTime -= updateScoreNumber((intTime / 10), 2) * 10;
+    if (score >= 10) {
+        score -= updateScoreNumber((score / 10), 2) * 10;
     } else {
         updateScoreNumber(0, 2);
     }
     
-    updateScoreNumber(intTime, 3);
+    updateScoreNumber(score, 3);
 }
 
 void main() {
     double delta = state.currentTime - state.pastTime;
 
     beginNewLevel();
-    
-    collisions();
 
     updatePlayer(delta);
-    
-    updateObjects(delta);
+
+    collisions();
     cleanObjects();
 
+    updateObjects(delta);
+
+    gameOver();
+    
     updateScore();
     
     state.pastTime = state.currentTime;

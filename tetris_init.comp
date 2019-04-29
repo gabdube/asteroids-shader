@@ -28,6 +28,7 @@ struct GameObject {
     
     float displayAngle;
     float displayAngleUpdate;
+    uint deleteFlag;
 };
 
 struct Mesh {
@@ -39,17 +40,18 @@ struct Mesh {
 
 struct Asteroid {
     uint life;
-    float radius;
-};
-
-struct Shot {
     uint objectIndex;
-    float lifetime;
+    float radius;
 };
 
 struct AsteroidArray {
     uint count;
     Asteroid asteroids[MAX_ASTEROID];
+};
+
+struct Shot {
+    uint objectIndex;
+    float lifetime;
 };
 
 struct ShotArray {
@@ -75,6 +77,8 @@ layout (std430, set=0, binding=3) buffer Attributes {
 
 layout (std430, set=0, binding=4) buffer GameData {
     uint currentLevel;
+    uint over;
+    uint score;
 
     uint asteroidMeshIndex;
     uint asteroidMeshCount;
@@ -145,7 +149,8 @@ void initPlayer() {
         IDENTITY,
         vec2(0.0, 0.0),         // pos
         0.0, 0.0,               // angle / vel
-        0.0, 0.0                // display angle / display angle vel
+        0.0, 0.0,               // display angle / display angle vel
+        0
     );
 } 
 
@@ -255,7 +260,7 @@ void initScore() {
 
     for (uint i = 0; i < MAX_SCORE_NUMBERS; i++) {
         index = baseObjectIndex+i;
-        game.objects[index] = GameObject(IDENTITY, pos, 0.0, 0.0, 0.0, 0.0);
+        game.objects[index] = GameObject(IDENTITY, pos, 0.0, 0.0, 0.0, 0.0, 0);
         draw.commands[index] = VkDrawIndexedIndirectCommand(zeroMesh.indicesCount, 1, zeroMesh.indicesOffset, zeroMesh.vertexOffset, index);
         
         pos.x += 0.05;
@@ -318,6 +323,8 @@ void main() {
     game.asteroids.count = 0;
     game.shots.count = 0;
     game.currentLevel = 0;
+    game.over = 0;
+    game.score = 0;
 
     state.pastTime = state.currentTime;
     state.reloadTime = float(state.currentTime);
