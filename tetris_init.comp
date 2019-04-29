@@ -39,8 +39,8 @@ struct Mesh {
 };
 
 struct Asteroid {
-    uint life;
     uint objectIndex;
+    uint life;
     float radius;
 };
 

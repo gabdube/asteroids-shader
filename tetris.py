@@ -1875,8 +1875,8 @@ class Mesh(Structure):
 
 class Asteroid(Structure):
     _fields_ = (
-        ('life', c_uint32),
         ('index', c_uint32),
+        ('life', c_uint32),
         ('radius', c_uint32),
     ) 
 

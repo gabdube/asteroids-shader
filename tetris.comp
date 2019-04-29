@@ -40,8 +40,8 @@ struct Mesh {
 };
 
 struct Asteroid {
-    uint life;
     uint objectIndex;
+    uint life;
     float radius;
 };
 
@@ -179,7 +179,7 @@ void beginNewLevel() {
     float ftime = float(state.currentTime);
     float x, y, a, j;
     float vel = 0.5 + (0.1*float(game.currentLevel));
-    uint index, meshIndex, nextCount = game.currentLevel + 5;
+    uint index, meshIndex, nextCount = 1;
     float rando = 0.0;
     vec2 playerPos = game.objects[0].position;
 
@@ -189,7 +189,7 @@ void beginNewLevel() {
             continue;
         }
 
-        if (!pushArray(Asteroid(1, index, 0.11))) {
+        if (!pushArray(Asteroid(index, 1, 0.11))) {
             continue;
         }
 
@@ -242,17 +242,21 @@ void collisions() {
             game.over = 1;
             break;
         }
+    }
 
-        // Shot collisions
-        for (uint j=0; j < game.shots.count; j++) {
-            shot = game.shots.shots[j];
-            pos2 = game.objects[shot.objectIndex].position; 
-            
-            if (distance(pos1, pos2) < as.radius) {
+    for (uint i=0; i < game.shots.count; i++) {
+        shot = game.shots.shots[i];
+        pos1 = game.objects[shot.objectIndex].position; 
+
+        for (uint j=0; j < game.asteroids.count; j++) {
+            as = game.asteroids.asteroids[j];
+            pos2 = game.objects[as.objectIndex].position; 
+
+            if (distance(pos1, pos2) < as.radius && i == 0) {
                 game.objects[shot.objectIndex].deleteFlag = 1;
                 game.objects[as.objectIndex].deleteFlag = 1;
                 game.score += (1 * game.currentLevel);
-            }
+            }   
         }
     }
 
@@ -265,53 +269,56 @@ void cleanObjects() {
     Asteroid ast;
     GameObject obj;
 
-    // Shots
-    while (index < game.shots.count) {
-        shot = game.shots.shots[index];
-        obj = game.objects[shot.objectIndex];
-        if (shot.lifetime < currentTime || obj.deleteFlag == 1) {
-            lastObjectIndex = draw_count.value - 1;
-            currentObjectIndex = shot.objectIndex;
-
-            // Swap remove the current object
-            game.objects[currentObjectIndex] = game.objects[lastObjectIndex];
-
-            // Update the draw commands to point at the good object
-            draw.commands[currentObjectIndex] = draw.commands[lastObjectIndex];
-            draw.commands[currentObjectIndex].firstInstance = currentObjectIndex;
-
-            // Swap remove the current shot object
-            game.shots.shots[index].lifetime = game.shots.shots[game.shots.count - 1].lifetime;
-
-            draw_count.value -= 1;
-            game.shots.count -= 1;
-        } else {
-            index += 1;
-        }
-    }
-
     // Asteroids
-    index = 0;
     while (index < game.asteroids.count) {
         ast = game.asteroids.asteroids[index];
         obj = game.objects[ast.objectIndex];
+
         if (obj.deleteFlag == 1) {
             lastObjectIndex = draw_count.value - 1;
             currentObjectIndex = ast.objectIndex;
-
-            // Swap remove the current object
-            game.objects[currentObjectIndex] = game.objects[lastObjectIndex];
-
-            // Update the draw commands to point at the good object
-            draw.commands[currentObjectIndex] = draw.commands[lastObjectIndex];
-            draw.commands[currentObjectIndex].firstInstance = currentObjectIndex;
 
             // Swap remove the current asteroid object
             game.asteroids.asteroids[index] = game.asteroids.asteroids[game.asteroids.count - 1];
             game.asteroids.asteroids[index].objectIndex = currentObjectIndex;
 
+            // Swap remove the current object
+            game.objects[currentObjectIndex] = game.objects[lastObjectIndex];
+
+            // Update the draw commands to point at the good object
+            draw.commands[currentObjectIndex] = draw.commands[lastObjectIndex];
+            draw.commands[currentObjectIndex].firstInstance = currentObjectIndex;
+
             draw_count.value -= 1;
             game.asteroids.count -= 1;
+        } else {
+            index += 1;
+        }
+    }
+    
+    // Shots
+    index = 0;
+    while (index < game.shots.count) {
+        shot = game.shots.shots[index];
+        obj = game.objects[shot.objectIndex];
+
+        if (shot.lifetime < currentTime || obj.deleteFlag == 1) {
+            lastObjectIndex = draw_count.value - 1;
+            currentObjectIndex = shot.objectIndex;
+
+            // Swap remove the current shot object
+            game.shots.shots[index] = game.shots.shots[game.shots.count - 1];
+            game.shots.shots[index].objectIndex = currentObjectIndex;
+            
+            // Swap remove the current object
+            game.objects[currentObjectIndex] = game.objects[lastObjectIndex];
+
+            // Update the draw commands to point at the good object
+            draw.commands[currentObjectIndex] = draw.commands[lastObjectIndex];
+            draw.commands[currentObjectIndex].firstInstance = currentObjectIndex;
+
+            draw_count.value -= 1;
+            game.shots.count -= 1;
         } else {
             index += 1;
         }
