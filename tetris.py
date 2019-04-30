@@ -908,8 +908,6 @@ def create_buffers(tetris):
         "draw_count_offset": GameData.draw_count.offset
     }
 
-    print(draw_data)
-
     # Final device memory allocation
     req = vk.MemoryRequirements()
     buffers, offsets = (attributes_buffer, game_data_buffer), [0,0]
@@ -1853,8 +1851,6 @@ class Mesh(Structure):
 class Asteroid(Structure):
     _fields_ = (
         ('index', c_uint32),
-        ('life', c_uint32),
-        ('radius', c_uint32),
     ) 
 
 
@@ -1893,6 +1889,7 @@ class GameData(Structure):
         ('asteroids', AsteroidArray),                 # 7536
         ('shots', ShotArray),                         # 7780
     )
+
 
 class GameState(Structure):
     _fields_ = (

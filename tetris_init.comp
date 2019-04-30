@@ -46,8 +46,6 @@ struct Mesh {
 
 struct Asteroid {
     uint objectIndex;
-    uint life;
-    float radius;
 };
 
 struct AsteroidArray {

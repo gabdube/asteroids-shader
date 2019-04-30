@@ -47,8 +47,6 @@ struct Mesh {
 
 struct Asteroid {
     uint objectIndex;
-    uint life;
-    float radius;
 };
 
 struct AsteroidArray {
@@ -140,11 +138,21 @@ bool pushArray(Shot obj) {
 }
 
 uint nextFreeObject() {
-    if (game.drawCount == MAX_OBJECT_COUNT) {
-        return 0;
-    } else {
-        return game.drawCount;
+    uint index = 0;
+    uint selectedIndex = 0;
+    
+    while (index < MAX_OBJECT_COUNT) {
+        if (game.objects[index].status == STATUS_INACTIVE) {
+            selectedIndex = index;
+            break;
+        }
+
+        index += 1;
     }
+
+    game.drawCount = max(selectedIndex+1, game.drawCount);
+
+    return selectedIndex;
 }
 
 void instanceShot(vec2 pos, float angle) {
@@ -178,31 +186,31 @@ void instanceShot(vec2 pos, float angle) {
         angle, 0.0,
         IDENTITY
     );    
-
-    game.drawCount += 1;
 }
 
 void beginNewLevel() {
-    /*const float PI = 3.1415926535897932384626433832795;
+    const float PI = 3.1415926535897932384626433832795;
 
     if (game.asteroids.count != 0) {
         return;
     }
 
+    // Instanciation
+    uint totalAsteroidsCount = game.currentLevel + 3;
     float ftime = float(state.currentTime);
     float x, y, a, j;
     float vel = 0.5 + (0.1*float(game.currentLevel));
-    uint index, meshIndex, nextCount = 1;
+    uint index, meshIndex;
     float rando = 0.0;
     vec2 playerPos = game.objects[0].position;
 
-    for (uint i = 0; i < nextCount; i++) {
+    for (uint i = 0; i < totalAsteroidsCount; i++) {
         index = nextFreeObject();
         if (index == 0) {
             continue;
         }
 
-        if (!pushArray(Asteroid(index, 1, 0.11))) {
+        if (!pushArray(Asteroid(index))) {
             continue;
         }
 
@@ -217,31 +225,32 @@ void beginNewLevel() {
             x = (hash11(rando + i + j + 21.9) - 0.5) * 2;
             y = (hash11(rando + i + j + 0.19) - 0.5) * 2;
             j += 0.001;
-        } while ( distance(playerPos, vec2(x, y)) < 0.15 );
+        } while ( distance(playerPos, vec2(x, y)) < 0.21 );
         
         a = hash11(rando + i * + 97.129) * (2*PI);
 
         game.objects[index] = GameObject(
-            IDENTITY,
+            VkDrawIndexedIndirectCommand(
+                mesh.indicesCount, 1, 
+                mesh.indicesOffset, mesh.vertexOffset,
+                index
+            ),
+
+            STATUS_ACTIVE,
+
             vec2(x, y),                    // pos
             a, vel,                        // angle / vel
             a, PI,                         // display angle / display angle velocity
-            0
+            IDENTITY
         );
-
-        draw.commands[index] = VkDrawIndexedIndirectCommand(
-            mesh.indicesCount, 1, 
-            mesh.indicesOffset, mesh.vertexOffset,
-            index
-        );
-        
-        draw_count.value += 1;
     }
 
-    game.currentLevel += 1;*/
+    game.currentLevel += 1;
 }
 
 void collisions() {
+    const float ASTEROID_RADIUS = 0.11;
+
     vec2 pos1, pos2, playerPos = game.objects[0].position;
     Asteroid as;
     Shot shot;
@@ -251,7 +260,7 @@ void collisions() {
         pos1 = game.objects[as.objectIndex].position;
 
         // Player collision
-        if (distance(playerPos, pos1) < as.radius) {
+        if (distance(playerPos, pos1) < ASTEROID_RADIUS) {
             game.over = 1;
             break;
         }
@@ -265,7 +274,7 @@ void collisions() {
             as = game.asteroids.asteroids[j];
             pos2 = game.objects[as.objectIndex].position; 
 
-            if (distance(pos1, pos2) < as.radius) {
+            if (distance(pos1, pos2) < ASTEROID_RADIUS) {
                 game.objects[shot.objectIndex].status = STATUS_INACTIVE;
                 game.objects[as.objectIndex].status = STATUS_INACTIVE;
                 game.score += (1 * game.currentLevel);
@@ -276,6 +285,41 @@ void collisions() {
 }
 
 void cleanObjects() {
+    Shot shot;
+    GameObject obj;
+    Asteroid ast;
+
+    uint index = 0;
+    while (index < game.shots.count) {
+        shot = game.shots.shots[index];
+        obj = game.objects[shot.objectIndex];
+
+        if (obj.status == STATUS_INACTIVE || shot.lifetime < state.currentTime) {
+            obj.status = STATUS_INACTIVE;
+            obj.command.indexCount = 0;
+            game.objects[shot.objectIndex] = obj;
+            game.shots.shots[index] = game.shots.shots[game.shots.count - 1];
+            game.shots.count -= 1;
+        } else {
+            index += 1;
+        }
+    }
+
+    index = 0;
+    while (index < game.asteroids.count) {
+        ast = game.asteroids.asteroids[index];
+        obj = game.objects[ast.objectIndex];
+
+        if (obj.status == STATUS_INACTIVE) {
+            obj.command.indexCount = 0;
+            game.objects[ast.objectIndex] = obj;
+            game.asteroids.asteroids[index] = game.asteroids.asteroids[game.asteroids.count - 1];
+            game.asteroids.count -= 1;
+        } else {
+            index += 1;
+        }
+    }
+
 }
 
 void updatePlayer(double delta) {
@@ -386,8 +430,8 @@ void gameOver() {
 }
 
 uint updateScoreNumber(uint n, uint scoreIndex) {
-    const uint BASE_NUMBER_MESH_INDEX = 2;                      // 0 is player, 1 is the shot
-    const uint BASE_SCORE_OBJ_INDEX = 1;                        // 0 is player, 1|2|3|4 are the four numbers
+    const uint BASE_NUMBER_MESH_INDEX = 2;                      // 0 is the player, 1 is the shot
+    const uint BASE_SCORE_OBJ_INDEX = 1;                        // 0 is the player, 1|2|3|4 are the four numbers
     uint scoreObjIndex = BASE_SCORE_OBJ_INDEX+scoreIndex;
 
     Mesh newMesh = game.meshes[BASE_NUMBER_MESH_INDEX + n];
