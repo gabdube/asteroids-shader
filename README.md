@@ -20,7 +20,7 @@ For more detail, see my blog post here: <https://gabdube.github.io/python/vulkan
 
 ### From the windows binary
 
-Download the binary from `https://github.com/gabdube/asteroids-shader/releases/tag/1.0.0` and the `asteroids.exe`
+Download the binary from `https://github.com/gabdube/asteroids-shader/releases/tag/1.0.0` and run `asteroids.exe`
 
 ### From the source
 
