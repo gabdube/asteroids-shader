@@ -7,4 +7,5 @@ python -m nuitka tetris.py\
   --python-flag=-OO\
   --python-flag=no_site\
   -j 2\
-  --show-progress --show-modules --show-scons
+  --show-progress --show-modules --show-scons\
+  --windows-disable-console 
