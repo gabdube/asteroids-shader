@@ -80,9 +80,9 @@ def enumerate_vk(fn, parent, item, parent2=None):
         return buf
 
 
-def cache_memory_properties(tetris):
+def cache_memory_properties(asteroids):
     mproperties = vk.PhysicalDeviceMemoryProperties()
-    tetris.GetPhysicalDeviceMemoryProperties(tetris.physical_device, byref(mproperties))
+    asteroids.GetPhysicalDeviceMemoryProperties(asteroids.physical_device, byref(mproperties))
 
     memory_types = mproperties.memory_types[0:mproperties.memory_type_count]
     memory_heaps = mproperties.memory_heaps[0:mproperties.memory_heap_count]
@@ -101,22 +101,22 @@ def cache_memory_properties(tetris):
     if host_type_index is None:
         raise RuntimeError("Could not find host memory type")
 
-    tetris.memory_types = memory_types
-    tetris.memory_heaps = memory_heaps
-    tetris.device_type_index = device_type_index
-    tetris.host_type_index = host_type_index
+    asteroids.memory_types = memory_types
+    asteroids.memory_heaps = memory_heaps
+    asteroids.device_type_index = device_type_index
+    asteroids.host_type_index = host_type_index
 
 
-def memory_type_index(tetris, flags):
-    if not hasattr(tetris, 'device_type_index'):
-        cache_memory_properties(tetris)
+def memory_type_index(asteroids, flags):
+    if not hasattr(asteroids, 'device_type_index'):
+        cache_memory_properties(asteroids)
 
     flags = IntFlag(flags)
     device_flags = IntFlag(vk.MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
     if device_flags in flags:
-        return tetris.device_type_index
+        return asteroids.device_type_index
 
-    return tetris.host_type_index
+    return asteroids.host_type_index
     
 
 def align(offset, align):
@@ -136,13 +136,13 @@ def buffer_params(size, usage):
     )
 
 
-def create_buffer(tetris, info):
-    return call_vk(tetris.CreateBuffer, vk.DeviceMemory, info, tetris.device)
+def create_buffer(asteroids, info):
+    return call_vk(asteroids.CreateBuffer, vk.DeviceMemory, info, asteroids.device)
 
 
-def physical_device_surface_capabilities(tetris):
+def physical_device_surface_capabilities(asteroids):
     caps = vk.SurfaceCapabilitiesKHR()
-    result = tetris.GetPhysicalDeviceSurfaceCapabilitiesKHR(tetris.physical_device, tetris.surface, byref(caps))
+    result = asteroids.GetPhysicalDeviceSurfaceCapabilitiesKHR(asteroids.physical_device, asteroids.surface, byref(caps))
     if result != vk.SUCCESS:
         raise RuntimeError(f"Failed to get surface capabilities: 0x{result:X}")
 
@@ -154,8 +154,8 @@ def physical_device_surface_capabilities(tetris):
 # SYSTEM setup
 #
 
-def create_window(tetris):
-    tetris.window = Window(width=800, height=800, fixed=True)
+def create_window(asteroids):
+    asteroids.window = Window(width=800, height=800, fixed=True)
 
 
 #
@@ -178,12 +178,12 @@ def available_layers():
     return [layer.layer_name.decode('utf-8') for layer in layers]
 
 
-def load_instance_functions(tetris, instance):
+def load_instance_functions(asteroids, instance):
     for name, function in vk.load_functions(instance, vk.InstanceFunctions, vk.GetInstanceProcAddr):
-        setattr(tetris, name, function)
+        setattr(asteroids, name, function)
 
 
-def create_instance(tetris):
+def create_instance(asteroids):
     system_surface_extensions = {"Windows": "VK_KHR_win32_surface", "Linux": "VK_KHR_xcb_surface"}
     system_surface_extension = system_surface_extensions.get(platform.system())
     if system_surface_extension is None:
@@ -193,11 +193,11 @@ def create_instance(tetris):
     layers = []
 
     if DEBUG and "VK_LAYER_LUNARG_standard_validation" in available_layers():
-        tetris.debug = True
+        asteroids.debug = True
         extensions.append("VK_EXT_debug_utils")
         layers.append("VK_LAYER_LUNARG_standard_validation")
     else:
-        tetris.debug = False
+        asteroids.debug = False
 
     print("")
     print(f"Using extensions: {extensions}")
@@ -225,12 +225,12 @@ def create_instance(tetris):
         enabled_extension_names=array_pointer(extensions)
     )
 
-    tetris.instance = call_vk(vk.CreateInstance, vk.Instance, create_info)
-    load_instance_functions(tetris, tetris.instance)    # We store all function pointers in the object
+    asteroids.instance = call_vk(vk.CreateInstance, vk.Instance, create_info)
+    load_instance_functions(asteroids, asteroids.instance)    # We store all function pointers in the object
 
 
-def create_debug_utils(tetris):
-    if not tetris.debug:
+def create_debug_utils(asteroids):
+    if not asteroids.debug:
         return
 
     #
@@ -275,17 +275,17 @@ def create_debug_utils(tetris):
         user_data = None
     )
 
-    tetris.callback_fn = callback_fn  # Must not be GC'd
-    tetris.debug_utils = call_vk(tetris.CreateDebugUtilsMessengerEXT, vk.DebugUtilsMessengerEXT, create_info, parent=tetris.instance)
+    asteroids.callback_fn = callback_fn  # Must not be GC'd
+    asteroids.debug_utils = call_vk(asteroids.CreateDebugUtilsMessengerEXT, vk.DebugUtilsMessengerEXT, create_info, parent=asteroids.instance)
 
 
-def create_surface(tetris):
+def create_surface(asteroids):
     surface_info = create_surface = None
-    window = tetris.window
+    window = asteroids.window
     
     platform_name =  platform.system()
     if platform_name == "Windows":
-        create_surface = tetris.CreateWin32SurfaceKHR
+        create_surface = asteroids.CreateWin32SurfaceKHR
         surface_info = vk.Win32SurfaceCreateInfoKHR(
             type = vk.STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
             next = None,
@@ -294,7 +294,7 @@ def create_surface(tetris):
             hwnd = window.handle
         )
     elif platform_name == "Linux":
-        create_surface = tetris.CreateXcbSurfaceKHR
+        create_surface = asteroids.CreateXcbSurfaceKHR
         surface_info = vk.XcbSurfaceCreateInfoKHR(
             type = vk.STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
             next = None,
@@ -303,41 +303,41 @@ def create_surface(tetris):
             window = window.handle
         )
 
-    tetris.surface = call_vk(create_surface, vk.SurfaceKHR, surface_info, parent=tetris.instance)
+    asteroids.surface = call_vk(create_surface, vk.SurfaceKHR, surface_info, parent=asteroids.instance)
 
 
-def available_device_extensions(tetris, physical_device):
+def available_device_extensions(asteroids, physical_device):
     ext_count = c_uint32(0)
 
-    result = tetris.EnumerateDeviceExtensionProperties(physical_device, None, byref(ext_count), None)
+    result = asteroids.EnumerateDeviceExtensionProperties(physical_device, None, byref(ext_count), None)
     if result != vk.SUCCESS:
         raise RuntimeError(f'Failed to find the device extensions. Error code: 0x{result:X}')
 
     extensions = array(vk.ExtensionProperties, ext_count.value, ())
 
-    result = tetris.EnumerateDeviceExtensionProperties(physical_device, None, byref(ext_count), array_pointer(extensions))
+    result = asteroids.EnumerateDeviceExtensionProperties(physical_device, None, byref(ext_count), array_pointer(extensions))
     if result != vk.SUCCESS:
         raise RuntimeError(f'Failed to find the instance layers. Error code: 0x{result:X}')
 
     return [ext.extension_name.decode('utf-8') for ext in extensions]
 
 
-def load_device_functions(tetris, device):
-    for name, function in vk.load_functions(device, vk.DeviceFunctions, tetris.GetDeviceProcAddr):
-        setattr(tetris, name, function)
+def load_device_functions(asteroids, device):
+    for name, function in vk.load_functions(device, vk.DeviceFunctions, asteroids.GetDeviceProcAddr):
+        setattr(asteroids, name, function)
 
 
-def create_device(tetris):
-    physical_devices = enumerate_vk(tetris.EnumeratePhysicalDevices, tetris.instance, vk.PhysicalDevice)
+def create_device(asteroids):
+    physical_devices = enumerate_vk(asteroids.EnumeratePhysicalDevices, asteroids.instance, vk.PhysicalDevice)
     physical_device = physical_devices[0]   # Good old, battle proven, "select the first physical device" technique
 
     # Properties
     device_props = vk.PhysicalDeviceProperties()
-    tetris.GetPhysicalDeviceProperties(physical_device, byref(device_props))
+    asteroids.GetPhysicalDeviceProperties(physical_device, byref(device_props))
 
     # Features
     supported_features = vk.PhysicalDeviceFeatures()
-    tetris.GetPhysicalDeviceFeatures(physical_device, byref(supported_features))
+    asteroids.GetPhysicalDeviceFeatures(physical_device, byref(supported_features))
 
     if supported_features.shader_storage_buffer_array_dynamic_indexing != vk.TRUE:
         raise RuntimeError("Storage buffer dynamic indexing is not supported")
@@ -351,7 +351,7 @@ def create_device(tetris):
 
     # Extensions
     extensions = ["VK_KHR_swapchain"]
-    valid_extensions = available_device_extensions(tetris, physical_device)
+    valid_extensions = available_device_extensions(asteroids, physical_device)
     
     if "VK_KHR_draw_indirect_count" in valid_extensions:
         extensions.append("VK_KHR_draw_indirect_count")      # Newish extension. Require pretty recent drivers.
@@ -365,7 +365,7 @@ def create_device(tetris):
     print(f"Using device extensions: {extensions}")
 
     # Queues
-    queue_families = tuple(enumerate(enumerate_vk(tetris.GetPhysicalDeviceQueueFamilyProperties, physical_device, vk.QueueFamilyProperties)))
+    queue_families = tuple(enumerate(enumerate_vk(asteroids.GetPhysicalDeviceQueueFamilyProperties, physical_device, vk.QueueFamilyProperties)))
     priorities = array(c_float, 1, (1.0,)) 
     priorities_ptr = array_pointer(priorities)
     
@@ -381,7 +381,7 @@ def create_device(tetris):
     )
 
     surface_supported = vk.Bool32(0)
-    result = tetris.GetPhysicalDeviceSurfaceSupportKHR(physical_device, graphics_index, tetris.surface, byref(surface_supported))
+    result = asteroids.GetPhysicalDeviceSurfaceSupportKHR(physical_device, graphics_index, asteroids.surface, byref(surface_supported))
     if result != vk.SUCCESS:
         raise RuntimeError(f"Failed to get surface support: 0x{result:X}")
     elif surface_supported == 0:
@@ -399,28 +399,28 @@ def create_device(tetris):
         enabled_features = pointer(features)
     )
 
-    tetris.physical_device = physical_device
-    tetris.device = device = call_vk(tetris.CreateDevice, vk.Device, device_info, parent=physical_device)
-    load_device_functions(tetris, tetris.device)   # Again, we store all device function pointers in the object
+    asteroids.physical_device = physical_device
+    asteroids.device = device = call_vk(asteroids.CreateDevice, vk.Device, device_info, parent=physical_device)
+    load_device_functions(asteroids, asteroids.device)   # Again, we store all device function pointers in the object
 
     # Fetch the queues
     Queue = namedtuple("Queue", "handle family_index family_info")
 
-    tetris.limits = device_props.limits
-    tetris.graphics = Queue(vk.Queue(0), graphics_index, graphics)
-    tetris.GetDeviceQueue(device, graphics_index, 0, byref(tetris.graphics.handle))
+    asteroids.limits = device_props.limits
+    asteroids.graphics = Queue(vk.Queue(0), graphics_index, graphics)
+    asteroids.GetDeviceQueue(device, graphics_index, 0, byref(asteroids.graphics.handle))
 
     print(f"\nPhysical device name: {device_props.device_name.decode('utf-8')}")
 
 
-def create_swapchain(tetris):
-    physical_device, device, surface = tetris.physical_device, tetris.device, tetris.surface
-    old_swapchain = getattr(tetris, 'swapchain', 0)
+def create_swapchain(asteroids):
+    physical_device, device, surface = asteroids.physical_device, asteroids.device, asteroids.surface
+    old_swapchain = getattr(asteroids, 'swapchain', 0)
     
     # Swapchain default Setup
-    caps = physical_device_surface_capabilities(tetris)
-    surface_formats = enumerate_vk(tetris.GetPhysicalDeviceSurfaceFormatsKHR, physical_device, vk.SurfaceFormatKHR, parent2=surface)
-    present_modes = enumerate_vk(tetris.GetPhysicalDeviceSurfacePresentModesKHR, physical_device, c_uint32, parent2=surface)
+    caps = physical_device_surface_capabilities(asteroids)
+    surface_formats = enumerate_vk(asteroids.GetPhysicalDeviceSurfaceFormatsKHR, physical_device, vk.SurfaceFormatKHR, parent2=surface)
+    present_modes = enumerate_vk(asteroids.GetPhysicalDeviceSurfacePresentModesKHR, physical_device, c_uint32, parent2=surface)
 
     extent = caps.current_extent
     transform = caps.current_transform
@@ -481,23 +481,23 @@ def create_swapchain(tetris):
         old_swapchain = old_swapchain
     )
 
-    tetris.extent = extent
-    tetris.swapchain_format = swp_format
-    tetris.swapchain = call_vk(tetris.CreateSwapchainKHR, vk.Device, swapchain_info, parent=device)
+    asteroids.extent = extent
+    asteroids.swapchain_format = swp_format
+    asteroids.swapchain = call_vk(asteroids.CreateSwapchainKHR, vk.Device, swapchain_info, parent=device)
 
     if old_swapchain is not None:
-        tetris.DestroySwapchainKHR(device, old_swapchain, None)
+        asteroids.DestroySwapchainKHR(device, old_swapchain, None)
 
 
-def create_swapchain_images(tetris):
+def create_swapchain_images(asteroids):
     SwapchainImage = namedtuple("SwapchainImage", "image view")
-    device, swapchain_format = tetris.device, tetris.swapchain_format
+    device, swapchain_format = asteroids.device, asteroids.swapchain_format
 
     swapchain_images = []
-    raw_images = enumerate_vk(tetris.GetSwapchainImagesKHR, tetris.device, vk.Image, parent2=tetris.swapchain)
+    raw_images = enumerate_vk(asteroids.GetSwapchainImagesKHR, asteroids.device, vk.Image, parent2=asteroids.swapchain)
 
-    for _, view in getattr(tetris, 'swapchain_images', ()):
-        tetris.DestroyImageView(device, view, None)
+    for _, view in getattr(asteroids, 'swapchain_images', ()):
+        asteroids.DestroyImageView(device, view, None)
 
     for image in raw_images:
         view_info = vk.ImageViewCreateInfo(
@@ -517,22 +517,22 @@ def create_swapchain_images(tetris):
             )
         )
 
-        view = call_vk(tetris.CreateImageView, vk.ImageView, view_info, parent=device)
+        view = call_vk(asteroids.CreateImageView, vk.ImageView, view_info, parent=device)
         swapchain_images.append(SwapchainImage(image, view))
 
-    tetris.swapchain_images = tuple(swapchain_images)
+    asteroids.swapchain_images = tuple(swapchain_images)
 
 
-def create_depth_stencil(tetris):
-    physical_device = tetris.physical_device
-    device, extent = tetris.device, tetris.extent
+def create_depth_stencil(asteroids):
+    physical_device = asteroids.physical_device
+    device, extent = asteroids.device, asteroids.extent
     width, height = extent.width, extent.height
     valid_depth_formats = (vk.FORMAT_D32_SFLOAT_S8_UINT, vk.FORMAT_D24_UNORM_S8_UINT, vk.FORMAT_D16_UNORM_S8_UINT)
 
     depth_format = None
     for valid_depth_format in valid_depth_formats:
         format_properties = vk.FormatProperties()
-        tetris.GetPhysicalDeviceFormatProperties(physical_device, valid_depth_format, byref(format_properties))
+        asteroids.GetPhysicalDeviceFormatProperties(physical_device, valid_depth_format, byref(format_properties))
 
         if IntFlag(vk.FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) in IntFlag(format_properties.optimal_tiling_features):
             depth_format = valid_depth_format
@@ -560,21 +560,21 @@ def create_depth_stencil(tetris):
         initial_layout = vk.IMAGE_LAYOUT_UNDEFINED
     )
 
-    depth_image = call_vk(tetris.CreateImage, vk.Image, image_info, parent=device)
+    depth_image = call_vk(asteroids.CreateImage, vk.Image, image_info, parent=device)
     
     # Image memory
     req = vk.MemoryRequirements()
-    tetris.GetImageMemoryRequirements(device, depth_image, byref(req))
+    asteroids.GetImageMemoryRequirements(device, depth_image, byref(req))
 
     mem_info = vk.MemoryAllocateInfo(
 		type = vk.STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 		next = None,
 		allocation_size = req.size,
-		memory_type_index = memory_type_index(tetris, vk.MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+		memory_type_index = memory_type_index(asteroids, vk.MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
 	)
 
-    depth_memory = call_vk(tetris.AllocateMemory, vk.DeviceMemory, mem_info, parent=device)
-    tetris.BindImageMemory(device, depth_image, depth_memory, 0)
+    depth_memory = call_vk(asteroids.AllocateMemory, vk.DeviceMemory, mem_info, parent=device)
+    asteroids.BindImageMemory(device, depth_image, depth_memory, 0)
 
     # View
     view_info = vk.ImageViewCreateInfo(
@@ -593,22 +593,22 @@ def create_depth_stencil(tetris):
             layer_count = 1,
         )
     )
-    depth_view = call_vk(tetris.CreateImageView, vk.ImageView, view_info, parent=device)
+    depth_view = call_vk(asteroids.CreateImageView, vk.ImageView, view_info, parent=device)
 
-    if hasattr(tetris, 'depth_format'):
-        tetris.DestroyImageView(device, tetris.depth_view, None)
-        tetris.FreeMemory(device, tetris.depth_memory, None)
-        tetris.DestroyImage(device, tetris.depth_image, None)
+    if hasattr(asteroids, 'depth_format'):
+        asteroids.DestroyImageView(device, asteroids.depth_view, None)
+        asteroids.FreeMemory(device, asteroids.depth_memory, None)
+        asteroids.DestroyImage(device, asteroids.depth_image, None)
         
-    tetris.depth_format = depth_format
-    tetris.depth_image = depth_image
-    tetris.depth_memory = depth_memory
-    tetris.depth_view = depth_view
+    asteroids.depth_format = depth_format
+    asteroids.depth_image = depth_image
+    asteroids.depth_memory = depth_memory
+    asteroids.depth_view = depth_view
 
 
-def create_render_pass(tetris):
-    image_format = tetris.swapchain_format
-    depth_format = tetris.depth_format
+def create_render_pass(asteroids):
+    image_format = asteroids.swapchain_format
+    depth_format = asteroids.depth_format
     
     # Attachments
     color = vk.AttachmentDescription(
@@ -697,20 +697,20 @@ def create_render_pass(tetris):
         dependencies = array_pointer(dep_array)
     )
 
-    tetris.render_pass = call_vk(tetris.CreateRenderPass, vk.RenderPass, render_pass_info, tetris.device)
+    asteroids.render_pass = call_vk(asteroids.CreateRenderPass, vk.RenderPass, render_pass_info, asteroids.device)
 
 
-def create_framebuffers(tetris):
-    device, extent = tetris.device, tetris.extent
+def create_framebuffers(asteroids):
+    device, extent = asteroids.device, asteroids.extent
     width, height = extent.width, extent.height
-    depth_view = tetris.depth_view
+    depth_view = asteroids.depth_view
     attachments = array(vk.ImageView, 2, ())
 
     fb_info = vk.FramebufferCreateInfo(
         type = vk.STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         next = None, 
         flags = 0,
-        render_pass = tetris.render_pass,
+        render_pass = asteroids.render_pass,
         attachment_count = 2,
         attachments = array_pointer(attachments),
         width = width,
@@ -719,36 +719,36 @@ def create_framebuffers(tetris):
     )
 
     framebuffers = []
-    for _, view in tetris.swapchain_images:
+    for _, view in asteroids.swapchain_images:
         attachments[::] = (view, depth_view)
-        framebuffers.append(call_vk(tetris.CreateFramebuffer, vk.Framebuffer, fb_info, device))
+        framebuffers.append(call_vk(asteroids.CreateFramebuffer, vk.Framebuffer, fb_info, device))
     
-    if hasattr(tetris, 'framebuffers'):
-        for fb in tetris.framebuffers:
-            tetris.DestroyFramebuffer(device, fb, None)
+    if hasattr(asteroids, 'framebuffers'):
+        for fb in asteroids.framebuffers:
+            asteroids.DestroyFramebuffer(device, fb, None)
 
-    tetris.framebuffers = tuple(framebuffers)
+    asteroids.framebuffers = tuple(framebuffers)
 
 #
 # Vulkan base resources setup.
 #
 
-def create_semaphores(tetris):
-    device = tetris.device
+def create_semaphores(asteroids):
+    device = asteroids.device
     sm_info = vk.SemaphoreCreateInfo(
         type = vk.STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
         next = None,
         flags = 0
     )
 
-    image_ready = call_vk(tetris.CreateSemaphore, vk.Semaphore, sm_info, device)
-    rendering_done = call_vk(tetris.CreateSemaphore, vk.Semaphore, sm_info, device)
+    image_ready = call_vk(asteroids.CreateSemaphore, vk.Semaphore, sm_info, device)
+    rendering_done = call_vk(asteroids.CreateSemaphore, vk.Semaphore, sm_info, device)
 
-    tetris.semaphores = (image_ready, rendering_done)
+    asteroids.semaphores = (image_ready, rendering_done)
 
 
-def create_fences(tetris):
-    device = tetris.device
+def create_fences(asteroids):
+    device = asteroids.device
     fence_info = vk.FenceCreateInfo(
         type = vk.STRUCTURE_TYPE_FENCE_CREATE_INFO,
         next = None,
@@ -756,25 +756,25 @@ def create_fences(tetris):
     )
 
     fences = []
-    for _ in tetris.framebuffers:
-        fences.append(call_vk(tetris.CreateFence, vk.Fence, fence_info, device))
+    for _ in asteroids.framebuffers:
+        fences.append(call_vk(asteroids.CreateFence, vk.Fence, fence_info, device))
 
-    tetris.fences = tuple(fences)
+    asteroids.fences = tuple(fences)
 
 
-def create_commands(tetris):
-    device = tetris.device
-    fb_count = len(tetris.framebuffers)
+def create_commands(asteroids):
+    device = asteroids.device
+    fb_count = len(asteroids.framebuffers)
 
     # Command pool
     pool_info = vk.CommandPoolCreateInfo(
         type = vk.STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         next = None,
         flags = vk.COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        queue_family_index = tetris.graphics.family_index
+        queue_family_index = asteroids.graphics.family_index
     )
 
-    pool = call_vk(tetris.CreateCommandPool, vk.CommandPool, pool_info, device)
+    pool = call_vk(asteroids.CreateCommandPool, vk.CommandPool, pool_info, device)
 
     # Command buffers
     # One for each framebuffer + 1 for setup purpose
@@ -787,55 +787,55 @@ def create_commands(tetris):
     )
 
     commands = array(vk.CommandBuffer, fb_count + 1, ())
-    tetris.AllocateCommandBuffers(device, allocate_info, commands)
+    asteroids.AllocateCommandBuffers(device, allocate_info, commands)
 
-    tetris.command_pool = pool
-    tetris.commands = tuple( (i, vk.CommandBuffer(b)) for i, b in enumerate(commands[:fb_count]))
-    tetris.setup_command = vk.CommandBuffer(commands[-1])
+    asteroids.command_pool = pool
+    asteroids.commands = tuple( (i, vk.CommandBuffer(b)) for i, b in enumerate(commands[:fb_count]))
+    asteroids.setup_command = vk.CommandBuffer(commands[-1])
 
 
 #
 # Vulkan buffers setup
 #
 
-def create_staging_buffer(tetris, allocation_size):
-    device = tetris.device
+def create_staging_buffer(asteroids, allocation_size):
+    device = asteroids.device
 
     # Buffer creation
-    staging_buffer = create_buffer(tetris, buffer_params(
+    staging_buffer = create_buffer(asteroids, buffer_params(
         allocation_size,
         vk.BUFFER_USAGE_TRANSFER_SRC_BIT
     ))
 
     staging_req = vk.MemoryRequirements()
-    tetris.GetBufferMemoryRequirements(device, staging_buffer, byref(staging_req))
+    asteroids.GetBufferMemoryRequirements(device, staging_buffer, byref(staging_req))
 
     staging_info = vk.MemoryAllocateInfo(
 		type = vk.STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 		next = None,
 		allocation_size = staging_req.size,
-		memory_type_index = memory_type_index(tetris, vk.MEMORY_PROPERTY_HOST_COHERENT_BIT | vk.MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+		memory_type_index = memory_type_index(asteroids, vk.MEMORY_PROPERTY_HOST_COHERENT_BIT | vk.MEMORY_PROPERTY_HOST_VISIBLE_BIT)
 	)
 
-    staging_alloc = call_vk(tetris.AllocateMemory, vk.DeviceMemory, staging_info, device)
+    staging_alloc = call_vk(asteroids.AllocateMemory, vk.DeviceMemory, staging_info, device)
 
-    tetris.BindBufferMemory(device, staging_buffer, staging_alloc, 0)
+    asteroids.BindBufferMemory(device, staging_buffer, staging_alloc, 0)
 
     # Make sure the data is zeroed before uploading it to the GPU
     ptr = c_void_p(0)
-    result = tetris.MapMemory(device, staging_alloc, 0, allocation_size, 0, byref(ptr))
+    result = asteroids.MapMemory(device, staging_alloc, 0, allocation_size, 0, byref(ptr))
     if result != vk.SUCCESS:
         raise RuntimeError("Failed to map memory")
 
     memset(ptr, 0, allocation_size)
 
-    tetris.UnmapMemory(device, staging_alloc)
+    asteroids.UnmapMemory(device, staging_alloc)
 
     return staging_buffer, staging_alloc
 
 
-def upload_staging(tetris, staging_buffer, buffer_regions):
-    cmd = tetris.setup_command
+def upload_staging(asteroids, staging_buffer, buffer_regions):
+    cmd = asteroids.setup_command
     begin_info = vk.CommandBufferBeginInfo(
         type = vk.STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         next = None,
@@ -843,12 +843,12 @@ def upload_staging(tetris, staging_buffer, buffer_regions):
         inheritance_info = None
     )
 
-    tetris.BeginCommandBuffer(cmd, begin_info)
+    asteroids.BeginCommandBuffer(cmd, begin_info)
 
     for buffer, region in buffer_regions:
-        tetris.CmdCopyBuffer(cmd, staging_buffer, buffer, 1, byref(region))
+        asteroids.CmdCopyBuffer(cmd, staging_buffer, buffer, 1, byref(region))
 
-    tetris.EndCommandBuffer(cmd)
+    asteroids.EndCommandBuffer(cmd)
 
     submit = vk.SubmitInfo(
         type = vk.STRUCTURE_TYPE_SUBMIT_INFO,
@@ -862,16 +862,16 @@ def upload_staging(tetris, staging_buffer, buffer_regions):
         signal_semaphores = None
     )
 
-    tetris.QueueSubmit(tetris.graphics.handle, 1, byref(submit), 0)
-    tetris.QueueWaitIdle(tetris.graphics.handle)
+    asteroids.QueueSubmit(asteroids.graphics.handle, 1, byref(submit), 0)
+    asteroids.QueueWaitIdle(asteroids.graphics.handle)
 
 
-def create_buffers(tetris):
-    device = tetris.device
+def create_buffers(asteroids):
+    device = asteroids.device
     attr_type = array(c_float, 4)
 
     # VERY VERY IMPORTANT. SSBO aligment must be respected. I keep forgeting this and all my demo crash on NVdia hardware.
-    storage_align = tetris.limits.min_storage_buffer_offset_alignment
+    storage_align = asteroids.limits.min_storage_buffer_offset_alignment
 
     # Compute allocation space
     attributes_size = align(sizeof(attr_type) * MAX_ATTRIBUTES_COUNT, storage_align)    # Enough to hold 1000 vertices. Should be plenty
@@ -879,12 +879,12 @@ def create_buffers(tetris):
     game_data_size  = align(sizeof(GameData), storage_align)
 
     # Device setup
-    attributes_buffer = create_buffer(tetris, buffer_params (
+    attributes_buffer = create_buffer(asteroids, buffer_params (
         attributes_size + indices_size,
         vk.BUFFER_USAGE_VERTEX_BUFFER_BIT | vk.BUFFER_USAGE_INDEX_BUFFER_BIT | vk.BUFFER_USAGE_TRANSFER_DST_BIT | vk.BUFFER_USAGE_STORAGE_BUFFER_BIT
     ))
 
-    game_data_buffer = create_buffer(tetris, buffer_params(
+    game_data_buffer = create_buffer(asteroids, buffer_params(
         game_data_size,
         vk.BUFFER_USAGE_INDIRECT_BUFFER_BIT | vk.BUFFER_USAGE_TRANSFER_DST_BIT | vk.BUFFER_USAGE_STORAGE_BUFFER_BIT
     ))
@@ -915,7 +915,7 @@ def create_buffers(tetris):
     current_offset = staging_alloc_size = 0
 
     for index, buffer in enumerate(buffers):
-        tetris.GetBufferMemoryRequirements(device, buffer, byref(req))
+        asteroids.GetBufferMemoryRequirements(device, buffer, byref(req))
 
         aligned_offset = align(current_offset, max(req.alignment, storage_align))
         offsets[index] = aligned_offset
@@ -929,17 +929,17 @@ def create_buffers(tetris):
 		type = vk.STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 		next = None,
 		allocation_size = current_offset + req.size,
-		memory_type_index = memory_type_index(tetris, vk.MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+		memory_type_index = memory_type_index(asteroids, vk.MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
 	)
 
-    final_alloc = call_vk(tetris.AllocateMemory, vk.DeviceMemory, final_info, device)
+    final_alloc = call_vk(asteroids.AllocateMemory, vk.DeviceMemory, final_info, device)
 
     for buffer, offset in zip(buffers, offsets):
-        tetris.BindBufferMemory(device, buffer, final_alloc, offset)
+        asteroids.BindBufferMemory(device, buffer, final_alloc, offset)
 
     # Mem set device memory to 0
-    staging_buffer, staging_alloc = create_staging_buffer(tetris, staging_alloc_size)
-    upload_staging(tetris, staging_buffer, buffer_copy_regions)
+    staging_buffer, staging_alloc = create_staging_buffer(asteroids, staging_alloc_size)
+    upload_staging(asteroids, staging_buffer, buffer_copy_regions)
 
     # Printing out data informations
     print("")
@@ -949,79 +949,79 @@ def create_buffers(tetris):
     print(f"Game data buffer size: {game_data_size}")
 
     # Saving
-    tetris.attributes_buffer = attributes_buffer
-    tetris.game_data_buffer = game_data_buffer
+    asteroids.attributes_buffer = attributes_buffer
+    asteroids.game_data_buffer = game_data_buffer
     
-    tetris.final_alloc = final_alloc
-    tetris.draw_data = draw_data
+    asteroids.final_alloc = final_alloc
+    asteroids.draw_data = draw_data
 
-    tetris.max_obj_count = MAX_OBJECT_COUNT
-    tetris.max_indices_count = MAX_INDICES_COUNT
-    tetris.max_attributes_count = MAX_ATTRIBUTES_COUNT
+    asteroids.max_obj_count = MAX_OBJECT_COUNT
+    asteroids.max_indices_count = MAX_INDICES_COUNT
+    asteroids.max_attributes_count = MAX_ATTRIBUTES_COUNT
 
     # Staging cleanup
-    tetris.DestroyBuffer(device, staging_buffer, None)
-    tetris.FreeMemory(device, staging_alloc, None)
+    asteroids.DestroyBuffer(device, staging_buffer, None)
+    asteroids.FreeMemory(device, staging_alloc, None)
 
 
-def create_game_state_buffer(tetris):
+def create_game_state_buffer(asteroids):
     # Note that this is not part of "create_buffers" because the method started to make my head hurt.
-    device = tetris.device
+    device = asteroids.device
 
     # Buffer
-    game_state_buffer = create_buffer(tetris, buffer_params(
+    game_state_buffer = create_buffer(asteroids, buffer_params(
         sizeof(GameState),
         vk.BUFFER_USAGE_TRANSFER_DST_BIT | vk.BUFFER_USAGE_STORAGE_BUFFER_BIT
     ))
     
     # Memory
     req = vk.MemoryRequirements()
-    tetris.GetBufferMemoryRequirements(device, game_state_buffer, byref(req))   
+    asteroids.GetBufferMemoryRequirements(device, game_state_buffer, byref(req))   
 
     final_info = vk.MemoryAllocateInfo(
 		type = vk.STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 		next = None,
 		allocation_size = req.size,
-		memory_type_index = memory_type_index(tetris, vk.MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+		memory_type_index = memory_type_index(asteroids, vk.MEMORY_PROPERTY_HOST_VISIBLE_BIT)
 	)
 
-    game_state_alloc = call_vk(tetris.AllocateMemory, vk.DeviceMemory, final_info, device)
+    game_state_alloc = call_vk(asteroids.AllocateMemory, vk.DeviceMemory, final_info, device)
 
     # Memory binding
-    tetris.BindBufferMemory(device, game_state_buffer, game_state_alloc, 0)
+    asteroids.BindBufferMemory(device, game_state_buffer, game_state_alloc, 0)
 
     # Zeroing
     ptr = c_void_p(0)
-    result = tetris.MapMemory(device, game_state_alloc, 0, req.size, 0, byref(ptr))
+    result = asteroids.MapMemory(device, game_state_alloc, 0, req.size, 0, byref(ptr))
     if result != vk.SUCCESS:
         raise RuntimeError("Failed to map game state memory")
 
     memset(ptr, 0, req.size)
 
-    tetris.UnmapMemory(device, game_state_alloc)
+    asteroids.UnmapMemory(device, game_state_alloc)
 
     # Printing
     print(f"Game state buffer size: {sizeof(GameState)}")
     print("")
 
     # Saving
-    tetris.game_state_buffer = game_state_buffer
-    tetris.game_state_alloc = game_state_alloc
-    tetris.GameState = GameState
+    asteroids.game_state_buffer = game_state_buffer
+    asteroids.game_state_alloc = game_state_alloc
+    asteroids.GameState = GameState
 
 #
 # Vulkan pipeline & shaders setup
 #
 
-def create_shaders(tetris):
-    device = tetris.device
-    create_shader = lambda info: call_vk(tetris.CreateShaderModule, vk.ShaderModule, info, parent=device)
+def create_shaders(asteroids):
+    device = asteroids.device
+    create_shader = lambda info: call_vk(asteroids.CreateShaderModule, vk.ShaderModule, info, parent=device)
 
     codes = (
-        open('./tetris.vert.spv', 'rb').read(),
-        open('./tetris.frag.spv', 'rb').read(),
-        open('./tetris.comp.spv', 'rb').read(),
-        open('./tetris_init.comp.spv', 'rb').read(),
+        open('./asteroids.vert.spv', 'rb').read(),
+        open('./asteroids.frag.spv', 'rb').read(),
+        open('./asteroids.comp.spv', 'rb').read(),
+        open('./asteroids_init.comp.spv', 'rb').read(),
     )
 
     shader_infos = []
@@ -1040,15 +1040,15 @@ def create_shaders(tetris):
     comp_module = create_shader(shader_infos[2])
     comp_init_module = create_shader(shader_infos[3])
 
-    tetris.shader_compute = comp_module
-    tetris.shader_compute_init = comp_init_module
-    tetris.shader_render = (
+    asteroids.shader_compute = comp_module
+    asteroids.shader_compute_init = comp_init_module
+    asteroids.shader_render = (
         (vert_module, vk.SHADER_STAGE_VERTEX_BIT),
         (frag_module, vk.SHADER_STAGE_FRAGMENT_BIT)
     )
 
 
-def create_descriptor_set_layouts(tetris):
+def create_descriptor_set_layouts(asteroids):
     def layout_binding(binding, stage=vk.SHADER_STAGE_COMPUTE_BIT):
         return vk.DescriptorSetLayoutBinding(
             binding = binding,
@@ -1075,8 +1075,8 @@ def create_descriptor_set_layouts(tetris):
         bindings = array_pointer(bindings)
     )
 
-    tetris.compute_set_layouts = (
-        call_vk(tetris.CreateDescriptorSetLayout, vk.DescriptorSetLayout, set_layout_info, tetris.device),
+    asteroids.compute_set_layouts = (
+        call_vk(asteroids.CreateDescriptorSetLayout, vk.DescriptorSetLayout, set_layout_info, asteroids.device),
     )
 
     # Render set layouts
@@ -1087,14 +1087,14 @@ def create_descriptor_set_layouts(tetris):
     set_layout_info.binding_count = len(bindings)
     set_layout_info.bindings = array_pointer(bindings)
 
-    tetris.render_set_layouts = (
-        call_vk(tetris.CreateDescriptorSetLayout, vk.DescriptorSetLayout, set_layout_info, tetris.device),
+    asteroids.render_set_layouts = (
+        call_vk(asteroids.CreateDescriptorSetLayout, vk.DescriptorSetLayout, set_layout_info, asteroids.device),
     )
 
 
-def create_descriptors(tetris):
-    device = tetris.device
-    MAX_SETS = len(tetris.compute_set_layouts) + len(tetris.render_set_layouts)
+def create_descriptors(asteroids):
+    device = asteroids.device
+    MAX_SETS = len(asteroids.compute_set_layouts) + len(asteroids.render_set_layouts)
 
     # Descriptor pool
     pool_sizes = array(vk.DescriptorPoolSize, 1, (
@@ -1110,9 +1110,9 @@ def create_descriptors(tetris):
         pool_sizes = array_pointer(pool_sizes)
     )
 
-    descriptor_pool = call_vk(tetris.CreateDescriptorPool, vk.DescriptorPool, descriptor_pool_info, device)
+    descriptor_pool = call_vk(asteroids.CreateDescriptorPool, vk.DescriptorPool, descriptor_pool_info, device)
 
-    sets = tetris.render_set_layouts + tetris.compute_set_layouts
+    sets = asteroids.render_set_layouts + asteroids.compute_set_layouts
     sets_layouts_array = array(vk.DescriptorSetLayout, MAX_SETS, sets)
     allocate_info = vk.DescriptorSetAllocateInfo(
         type = vk.STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -1123,14 +1123,14 @@ def create_descriptors(tetris):
     )
 
     descriptor_sets = array(vk.DescriptorSet, MAX_SETS, ())
-    tetris.AllocateDescriptorSets(device, allocate_info, array_pointer(descriptor_sets))
+    asteroids.AllocateDescriptorSets(device, allocate_info, array_pointer(descriptor_sets))
 
-    tetris.descriptor_pool = descriptor_pool
-    tetris.render_descriptor_sets = array(vk.DescriptorSet, 1, descriptor_sets[0:1])
-    tetris.compute_descriptor_sets =array(vk.DescriptorSet, 1,  descriptor_sets[1:2])
+    asteroids.descriptor_pool = descriptor_pool
+    asteroids.render_descriptor_sets = array(vk.DescriptorSet, 1, descriptor_sets[0:1])
+    asteroids.compute_descriptor_sets =array(vk.DescriptorSet, 1,  descriptor_sets[1:2])
 
 
-def update_descriptor_sets(tetris):
+def update_descriptor_sets(asteroids):
     def buffer_write_set(dst_set, dst_binding, buffer):
         return vk.WriteDescriptorSet(
             type = vk.STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1145,13 +1145,13 @@ def update_descriptor_sets(tetris):
             texel_buffer_view = None
         )
 
-    dd = tetris.draw_data
-    attributes_buffer = tetris.attributes_buffer
-    game_data_buffer = tetris.game_data_buffer
-    game_state_buffer = tetris.game_state_buffer
+    dd = asteroids.draw_data
+    attributes_buffer = asteroids.attributes_buffer
+    game_data_buffer = asteroids.game_data_buffer
+    game_state_buffer = asteroids.game_state_buffer
 
-    compute_set = tetris.compute_descriptor_sets[0]
-    render_set = tetris.render_descriptor_sets[0]
+    compute_set = asteroids.compute_descriptor_sets[0]
+    render_set = asteroids.render_descriptor_sets[0]
 
     # Graphics set
     indices_binding = buffer_write_set(
@@ -1186,14 +1186,14 @@ def update_descriptor_sets(tetris):
     ]
 
     writes_array = array(vk.WriteDescriptorSet, len(writes), writes)
-    tetris.UpdateDescriptorSets(tetris.device, len(writes), array_pointer(writes_array), 0, None)
+    asteroids.UpdateDescriptorSets(asteroids.device, len(writes), array_pointer(writes_array), 0, None)
 
 
-def create_pipeline_layouts(tetris):
-    device = tetris.device
+def create_pipeline_layouts(asteroids):
+    device = asteroids.device
     
-    render_set_layouts_array = array(vk.DescriptorSetLayout, len(tetris.render_set_layouts), tetris.render_set_layouts)
-    compute_set_layouts_array = array(vk.DescriptorSetLayout, len(tetris.compute_set_layouts), tetris.compute_set_layouts)
+    render_set_layouts_array = array(vk.DescriptorSetLayout, len(asteroids.render_set_layouts), asteroids.render_set_layouts)
+    compute_set_layouts_array = array(vk.DescriptorSetLayout, len(asteroids.compute_set_layouts), asteroids.compute_set_layouts)
 
     render_layout_info = vk.PipelineLayoutCreateInfo(
         type = vk.STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -1215,11 +1215,11 @@ def create_pipeline_layouts(tetris):
         push_constant_ranges = None
     )
 
-    tetris.render_pipeline_layout = call_vk(tetris.CreatePipelineLayout, vk.PipelineLayout, render_layout_info, device)
-    tetris.compute_pipeline_layout = call_vk(tetris.CreatePipelineLayout, vk.PipelineLayout, compute_layout_info, device)
+    asteroids.render_pipeline_layout = call_vk(asteroids.CreatePipelineLayout, vk.PipelineLayout, render_layout_info, device)
+    asteroids.compute_pipeline_layout = call_vk(asteroids.CreatePipelineLayout, vk.PipelineLayout, compute_layout_info, device)
 
     
-def create_compute_pipeline(tetris):
+def create_compute_pipeline(asteroids):
     entry_name = bytes('main', 'utf-8') + b'\x00'
     int_size = sizeof(c_uint32)
 
@@ -1229,7 +1229,7 @@ def create_compute_pipeline(tetris):
     map_entries = array(vk.SpecializationMapEntry, 3, (max_obj_count, max_indices, max_attributes))
 
     # Constant values are defined in `create_buffers`
-    constant_buffer = array(c_uint32, 3, (tetris.max_obj_count, tetris.max_indices_count, tetris.max_attributes_count))
+    constant_buffer = array(c_uint32, 3, (asteroids.max_obj_count, asteroids.max_indices_count, asteroids.max_attributes_count))
     constant_buffer_ptr = cast(array_pointer(constant_buffer), c_void_p)
 
     spez = vk.SpecializationInfo(
@@ -1244,7 +1244,7 @@ def create_compute_pipeline(tetris):
         next = None,
         flags = 0,
         stage = vk.SHADER_STAGE_COMPUTE_BIT,
-        module = tetris.shader_compute,
+        module = asteroids.shader_compute,
         name = c_char_p(entry_name),
         specialization_info = pointer(spez)
     )
@@ -1254,31 +1254,31 @@ def create_compute_pipeline(tetris):
         next = None,
         flags = 0,
         stage = compute_stage,
-        layout = tetris.compute_pipeline_layout,
+        layout = asteroids.compute_pipeline_layout,
         base_pipeline_handle = 0,
         base_pipeline_index = -1
     )
 
-    tetris.compute_pipeline = vk.Pipeline(0)
-    result = tetris.CreateComputePipelines(tetris.device, 0, 1, byref(compute_pipeline_info), None, byref(tetris.compute_pipeline))
+    asteroids.compute_pipeline = vk.Pipeline(0)
+    result = asteroids.CreateComputePipelines(asteroids.device, 0, 1, byref(compute_pipeline_info), None, byref(asteroids.compute_pipeline))
     if result != vk.SUCCESS:
         raise RuntimeError(f"Failed to create the compute pipeline: 0x{result:X}")
 
-    compute_pipeline_info.stage.module = tetris.shader_compute_init
-    tetris.compute_init_pipeline = vk.Pipeline(0)
-    result = tetris.CreateComputePipelines(tetris.device, 0, 1, byref(compute_pipeline_info), None, byref(tetris.compute_init_pipeline))
+    compute_pipeline_info.stage.module = asteroids.shader_compute_init
+    asteroids.compute_init_pipeline = vk.Pipeline(0)
+    result = asteroids.CreateComputePipelines(asteroids.device, 0, 1, byref(compute_pipeline_info), None, byref(asteroids.compute_init_pipeline))
     if result != vk.SUCCESS:
         raise RuntimeError(f"Failed to create the compute init pipeline: 0x{result:X}")
 
 
-def create_render_pipeline(tetris):
-    device = tetris.device
+def create_render_pipeline(asteroids):
+    device = asteroids.device
 
     # Shader states
     entry_name = bytes('main', 'utf-8') + b'\x00'
     shader_stages = []
 
-    for module, stage_flags in tetris.shader_render:
+    for module, stage_flags in asteroids.shader_render:
         stage = vk.PipelineShaderStageCreateInfo(
             type = vk.STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             next = None,
@@ -1441,25 +1441,25 @@ def create_render_pipeline(tetris):
         depth_stencil_state = pointer(depth_stencil_state),
         color_blend_state = pointer(color_blend_state),
         dynamic_state = pointer(dynamic_state),
-        layout = tetris.render_pipeline_layout,
-        render_pass = tetris.render_pass,
+        layout = asteroids.render_pipeline_layout,
+        render_pass = asteroids.render_pass,
         subpass = 0,
         base_pipeline_handle = 0,
         base_pipeline_index = 0
     )
 
-    if hasattr(tetris, 'pipeline'):
-        tetris.DestroyPipeline(device, tetris.pipeline, None)
+    if hasattr(asteroids, 'pipeline'):
+        asteroids.DestroyPipeline(device, asteroids.pipeline, None)
 
-    tetris.pipeline = vk.Pipeline(0)
-    result = tetris.CreateGraphicsPipelines(device, 0, 1, byref(pipeline_info), None, byref(tetris.pipeline))
+    asteroids.pipeline = vk.Pipeline(0)
+    result = asteroids.CreateGraphicsPipelines(device, 0, 1, byref(pipeline_info), None, byref(asteroids.pipeline))
 
 
-def create_render_cache(tetris):
+def create_render_cache(asteroids):
     # Cache ctypes structures to keep the run loop super lean
-    extent = tetris.extent
+    extent = asteroids.extent
     width, height = extent.width, extent.height
-    render_pass = tetris.render_pass
+    render_pass = asteroids.render_pass
 
     # Command buffer begin info. Technically not required to be cached because the command buffers
     # are only recorded once. But I do cache it in my other projects.
@@ -1483,7 +1483,7 @@ def create_render_cache(tetris):
     # Render pass begin info
     # Same deal as the command buffer begin info
     render_pass_begins = []
-    for fb in tetris.framebuffers:
+    for fb in asteroids.framebuffers:
         render_pass_begins.append(vk.RenderPassBeginInfo(
             type = vk.STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             next = None,
@@ -1499,12 +1499,12 @@ def create_render_cache(tetris):
 
     # Submit Infos
     # This one is actually worthwhile to cache in this application
-    image_ready_sm_ptr = pointer(tetris.semaphores[0])
-    rendering_done_sm_ptr = pointer(tetris.semaphores[1])
+    image_ready_sm_ptr = pointer(asteroids.semaphores[0])
+    rendering_done_sm_ptr = pointer(asteroids.semaphores[1])
     wait_dst = c_uint32(vk.PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
 
     submit_infos = []
-    for _, cmd in tetris.commands:
+    for _, cmd in asteroids.commands:
         submit_infos.append(vk.SubmitInfo(
             type = vk.STRUCTURE_TYPE_SUBMIT_INFO,
             next = None,
@@ -1520,20 +1520,20 @@ def create_render_cache(tetris):
     # Present Infos
     # This one too is actually worthwhile to cache
     present_infos = []
-    for i in range(len(tetris.framebuffers)):
+    for i in range(len(asteroids.framebuffers)):
         present_infos.append(vk.PresentInfoKHR(
             type = vk.STRUCTURE_TYPE_PRESENT_INFO_KHR,
             next = None,
             wait_semaphore_count = 1,
             wait_semaphores = rendering_done_sm_ptr,
             swapchain_count = 1,
-            swapchains = pointer(tetris.swapchain),
+            swapchains = pointer(asteroids.swapchain),
             image_indices = pointer(c_uint32(i)),
             results = None
         ))
 
 
-    tetris.render_cache = {
+    asteroids.render_cache = {
         "begin_info": begin_info,
         "clear_values": clear_values,
         "render_pass_begins": tuple(render_pass_begins),
@@ -1545,25 +1545,25 @@ def create_render_cache(tetris):
     } 
 
 
-def record_draw_commands(tetris, index, cmd):
+def record_draw_commands(asteroids, index, cmd):
     # Render commands recording for device without a dedicated compute queue
-    cache = tetris.render_cache
+    cache = asteroids.render_cache
 
-    tetris.BeginCommandBuffer(cmd, cache["begin_info"])
-    draw_data = tetris.draw_data
+    asteroids.BeginCommandBuffer(cmd, cache["begin_info"])
+    draw_data = asteroids.draw_data
 
     # Compute phase
-    tetris.CmdBindPipeline(cmd, vk.PIPELINE_BIND_POINT_COMPUTE, tetris.compute_pipeline)
-    tetris.CmdBindDescriptorSets(
-        cmd, vk.PIPELINE_BIND_POINT_COMPUTE, tetris.compute_pipeline_layout,
-        0, len(tetris.compute_descriptor_sets), array_pointer(tetris.compute_descriptor_sets),
+    asteroids.CmdBindPipeline(cmd, vk.PIPELINE_BIND_POINT_COMPUTE, asteroids.compute_pipeline)
+    asteroids.CmdBindDescriptorSets(
+        cmd, vk.PIPELINE_BIND_POINT_COMPUTE, asteroids.compute_pipeline_layout,
+        0, len(asteroids.compute_descriptor_sets), array_pointer(asteroids.compute_descriptor_sets),
         0, None 
     )
-    tetris.CmdDispatch(cmd, 1, 1, 1)
+    asteroids.CmdDispatch(cmd, 1, 1, 1)
 
     # Barrier to make sure the compute shader execution finish before the render pass begins
     # Not even sure I'm using this right though...
-    tetris.CmdPipelineBarrier(
+    asteroids.CmdPipelineBarrier(
         cmd,
         vk.PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
         vk.PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -1574,64 +1574,64 @@ def record_draw_commands(tetris, index, cmd):
     )
 
     # Render phase
-    tetris.CmdBeginRenderPass(cmd, cache["render_pass_begins"][index], vk.SUBPASS_CONTENTS_INLINE)
+    asteroids.CmdBeginRenderPass(cmd, cache["render_pass_begins"][index], vk.SUBPASS_CONTENTS_INLINE)
 
-    tetris.CmdBindPipeline(cmd, vk.PIPELINE_BIND_POINT_GRAPHICS, tetris.pipeline)
-    tetris.CmdSetScissor(cmd, 0, 1, byref(cache['scissor']))
-    tetris.CmdSetViewport(cmd, 0, 1, byref(cache['viewport']))
+    asteroids.CmdBindPipeline(cmd, vk.PIPELINE_BIND_POINT_GRAPHICS, asteroids.pipeline)
+    asteroids.CmdSetScissor(cmd, 0, 1, byref(cache['scissor']))
+    asteroids.CmdSetViewport(cmd, 0, 1, byref(cache['viewport']))
 
-    tetris.CmdBindDescriptorSets(
-        cmd, vk.PIPELINE_BIND_POINT_GRAPHICS, tetris.render_pipeline_layout,
-        0, len(tetris.render_descriptor_sets), array_pointer(tetris.render_descriptor_sets),
+    asteroids.CmdBindDescriptorSets(
+        cmd, vk.PIPELINE_BIND_POINT_GRAPHICS, asteroids.render_pipeline_layout,
+        0, len(asteroids.render_descriptor_sets), array_pointer(asteroids.render_descriptor_sets),
         0, None 
     )
 
-    if hasattr(tetris, 'CmdDrawIndexedIndirectCountKHR'):
-        draw = tetris.CmdDrawIndexedIndirectCountKHR
-    elif hasattr(tetris, 'CmdDrawIndexedIndirectCountAMD'):
-        draw = tetris.CmdDrawIndexedIndirectCountAMD
+    if hasattr(asteroids, 'CmdDrawIndexedIndirectCountKHR'):
+        draw = asteroids.CmdDrawIndexedIndirectCountKHR
+    elif hasattr(asteroids, 'CmdDrawIndexedIndirectCountAMD'):
+        draw = asteroids.CmdDrawIndexedIndirectCountAMD
     else:
         raise RuntimeError("Waht?")
 
-    tetris.CmdBindIndexBuffer(cmd, tetris.attributes_buffer, draw_data["index_offset"], vk.INDEX_TYPE_UINT32)
-    tetris.CmdBindVertexBuffers(cmd, 0, len(draw_data["vertex_buffers"]), draw_data["vertex_buffers"], draw_data["vertex_offsets"])
+    asteroids.CmdBindIndexBuffer(cmd, asteroids.attributes_buffer, draw_data["index_offset"], vk.INDEX_TYPE_UINT32)
+    asteroids.CmdBindVertexBuffers(cmd, 0, len(draw_data["vertex_buffers"]), draw_data["vertex_buffers"], draw_data["vertex_offsets"])
 
     draw(
         cmd, 
-        tetris.game_data_buffer, draw_data["draw_params_offset"], 
-        tetris.game_data_buffer, draw_data["draw_count_offset"],
-        tetris.max_obj_count,
+        asteroids.game_data_buffer, draw_data["draw_params_offset"], 
+        asteroids.game_data_buffer, draw_data["draw_count_offset"],
+        asteroids.max_obj_count,
         draw_data["draw_params_stride"]
     )
 
-    tetris.CmdEndRenderPass(cmd)
+    asteroids.CmdEndRenderPass(cmd)
 
-    tetris.EndCommandBuffer(cmd)
+    asteroids.EndCommandBuffer(cmd)
 
 
-def record_commands(tetris):
-    for i, cmd in tetris.commands:
-        record_draw_commands(tetris, i, cmd)
+def record_commands(asteroids):
+    for i, cmd in asteroids.commands:
+        record_draw_commands(asteroids, i, cmd)
 
 #
 # Runtime
 #
 
-def init(tetris):
-    cmd = tetris.setup_command
+def init(asteroids):
+    cmd = asteroids.setup_command
 
-    tetris.BeginCommandBuffer(cmd, tetris.render_cache["begin_info"])
+    asteroids.BeginCommandBuffer(cmd, asteroids.render_cache["begin_info"])
 
-    tetris.CmdBindPipeline(cmd, vk.PIPELINE_BIND_POINT_COMPUTE, tetris.compute_init_pipeline)
-    tetris.CmdBindDescriptorSets(
-        cmd, vk.PIPELINE_BIND_POINT_COMPUTE, tetris.compute_pipeline_layout,
-        0, len(tetris.compute_descriptor_sets), array_pointer(tetris.compute_descriptor_sets),
+    asteroids.CmdBindPipeline(cmd, vk.PIPELINE_BIND_POINT_COMPUTE, asteroids.compute_init_pipeline)
+    asteroids.CmdBindDescriptorSets(
+        cmd, vk.PIPELINE_BIND_POINT_COMPUTE, asteroids.compute_pipeline_layout,
+        0, len(asteroids.compute_descriptor_sets), array_pointer(asteroids.compute_descriptor_sets),
         0, None 
     )
 
-    tetris.CmdDispatch(cmd, 1, 1, 1)
+    asteroids.CmdDispatch(cmd, 1, 1, 1)
 
-    tetris.EndCommandBuffer(cmd)
+    asteroids.EndCommandBuffer(cmd)
 
     submit = vk.SubmitInfo(
         type = vk.STRUCTURE_TYPE_SUBMIT_INFO,
@@ -1645,23 +1645,23 @@ def init(tetris):
         signal_semaphores = None
     )
 
-    tetris.QueueSubmit(tetris.graphics.handle, 1, byref(submit), 0)
-    tetris.QueueWaitIdle(tetris.graphics.handle)
+    asteroids.QueueSubmit(asteroids.graphics.handle, 1, byref(submit), 0)
+    asteroids.QueueWaitIdle(asteroids.graphics.handle)
 
 
-def update(tetris, base_time, input_state, window):
-    device = tetris.device
-    alloc = tetris.game_state_alloc
+def update(asteroids, base_time, input_state, window):
+    device = asteroids.device
+    alloc = asteroids.game_state_alloc
 
     # When a key is held on linux, the system generates a KeyDown and a KeyUp event but Windows
     # only generates a KeyDown. This method makes this code work on both OS
     input_buffer = {}  
 
     ptr = c_void_p(0)
-    tetris.MapMemory(device, alloc, 0, vk.WHOLE_SIZE, 0, byref(ptr))
+    asteroids.MapMemory(device, alloc, 0, vk.WHOLE_SIZE, 0, byref(ptr))
 
     # Update game time
-    data = tetris.GameState.from_address(ptr.value)
+    data = asteroids.GameState.from_address(ptr.value)
     data.game_time = time.monotonic() - base_time
 
     # Update game input
@@ -1682,20 +1682,20 @@ def update(tetris, base_time, input_state, window):
     data.left = input_state[keys.Left]
     data.space = input_state[keys.Space]
  
-    tetris.UnmapMemory(device, alloc)
+    asteroids.UnmapMemory(device, alloc)
 
 
-def render(tetris, base_time, input_state, window):
+def render(asteroids, base_time, input_state, window):
     UINT32_MAX = 4294967295
-    device, swapchain = tetris.device, tetris.swapchain
-    image_ready, rendering_done = tetris.semaphores
+    device, swapchain = asteroids.device, asteroids.swapchain
+    image_ready, rendering_done = asteroids.semaphores
     
-    cache = tetris.render_cache
+    cache = asteroids.render_cache
     image_index = cache['image_index']
 
     # Wait for presentable image
     if image_index.value == UINT32_MAX:
-        result = tetris.AcquireNextImageKHR(device, swapchain, 0, image_ready, 0, byref(image_index))
+        result = asteroids.AcquireNextImageKHR(device, swapchain, 0, image_ready, 0, byref(image_index))
         if result == vk.NOT_READY or result == vk.TIMEOUT:
             return  # Swapchain not ready. Skip rendering for this cycle
         elif result == vk.SUBOPTIMAL_KHR:
@@ -1705,29 +1705,29 @@ def render(tetris, base_time, input_state, window):
 
     # Wait for fence
     image_index = image_index.value
-    fence = tetris.fences[image_index]
-    result = tetris.WaitForFences(device, 1, byref(fence), vk.TRUE, 0)
+    fence = asteroids.fences[image_index]
+    result = asteroids.WaitForFences(device, 1, byref(fence), vk.TRUE, 0)
     
     if result == vk.TIMEOUT:
         return  # Fence not ready. Skip rendering for this cycle
     elif result != vk.SUCCESS:
         raise RuntimeError(f"WaitForFences failed with error code 0x{result:X}")
     else:
-        tetris.ResetFences(device, 1, byref(fence))
+        asteroids.ResetFences(device, 1, byref(fence))
 
     # Update inputs before submit
-    update(tetris, base_time, input_state, window)
+    update(asteroids, base_time, input_state, window)
 
     # Submit
-    queue = tetris.graphics.handle
+    queue = asteroids.graphics.handle
     submit_info = cache['submit_infos'][image_index]
-    result = tetris.QueueSubmit(queue, 1, byref(submit_info), fence)
+    result = asteroids.QueueSubmit(queue, 1, byref(submit_info), fence)
     if result != vk.SUCCESS:
         raise RuntimeError(f"QueueSubmit failed with error code 0x{result:X}")
 
     # Present
     present_info = cache['present_infos'][image_index]
-    result = tetris.QueuePresentKHR(queue, byref(present_info))
+    result = asteroids.QueuePresentKHR(queue, byref(present_info))
     if result != vk.SUCCESS:
         raise RuntimeError(f"QueuePresentKHR failed with error code 0x{result:X}")
 
@@ -1735,9 +1735,9 @@ def render(tetris, base_time, input_state, window):
     cache['image_index'].value = UINT32_MAX
 
 
-def run_loop(tetris):
+def run_loop(asteroids):
     running = True
-    w = tetris.window
+    w = asteroids.window
     w.show()
 
     base_time = time.monotonic()
@@ -1745,73 +1745,73 @@ def run_loop(tetris):
     input_state = {k: False for k in events.ArrowKeys}
     input_state[events.Keys.Space] = False
 
-    update(tetris, base_time, input_state, w)
-    init(tetris)
+    update(asteroids, base_time, input_state, w)
+    init(asteroids)
 
     print("It's running!")
 
     while running:
         w.translate_system_events()
         running = not w.must_exit 
-        render(tetris, base_time, input_state, w)
+        render(asteroids, base_time, input_state, w)
 
 
-def cleanup(tetris):
-    i, d = tetris.instance, tetris.device
+def cleanup(asteroids):
+    i, d = asteroids.instance, asteroids.device
 
-    tetris.DeviceWaitIdle(d)
+    asteroids.DeviceWaitIdle(d)
 
-    tetris.DestroyPipeline(d, tetris.pipeline, None)
-    tetris.DestroyPipeline(d, tetris.compute_pipeline, None)
-    tetris.DestroyPipeline(d, tetris.compute_init_pipeline, None)
-    tetris.DestroyPipelineLayout(d, tetris.render_pipeline_layout, None)
-    tetris.DestroyPipelineLayout(d, tetris.compute_pipeline_layout, None)
+    asteroids.DestroyPipeline(d, asteroids.pipeline, None)
+    asteroids.DestroyPipeline(d, asteroids.compute_pipeline, None)
+    asteroids.DestroyPipeline(d, asteroids.compute_init_pipeline, None)
+    asteroids.DestroyPipelineLayout(d, asteroids.render_pipeline_layout, None)
+    asteroids.DestroyPipelineLayout(d, asteroids.compute_pipeline_layout, None)
 
-    tetris.DestroyDescriptorPool(d, tetris.descriptor_pool, None)
+    asteroids.DestroyDescriptorPool(d, asteroids.descriptor_pool, None)
 
-    tetris.DestroyDescriptorSetLayout(d, tetris.render_set_layouts[0], None)
-    tetris.DestroyDescriptorSetLayout(d, tetris.compute_set_layouts[0], None)
+    asteroids.DestroyDescriptorSetLayout(d, asteroids.render_set_layouts[0], None)
+    asteroids.DestroyDescriptorSetLayout(d, asteroids.compute_set_layouts[0], None)
 
-    for shader, _ in tetris.shader_render:
-        tetris.DestroyShaderModule(d, shader, None)
+    for shader, _ in asteroids.shader_render:
+        asteroids.DestroyShaderModule(d, shader, None)
 
-    tetris.DestroyShaderModule(d, tetris.shader_compute, None)
-    tetris.DestroyShaderModule(d, tetris.shader_compute_init, None)
+    asteroids.DestroyShaderModule(d, asteroids.shader_compute, None)
+    asteroids.DestroyShaderModule(d, asteroids.shader_compute_init, None)
 
-    tetris.DestroyCommandPool(d, tetris.command_pool, None)
+    asteroids.DestroyCommandPool(d, asteroids.command_pool, None)
 
-    tetris.DestroyBuffer(d, tetris.attributes_buffer, None)
-    tetris.DestroyBuffer(d, tetris.game_data_buffer, None)
-    tetris.DestroyBuffer(d, tetris.game_state_buffer, None)
-    tetris.FreeMemory(d, tetris.final_alloc, None)
-    tetris.FreeMemory(d, tetris.game_state_alloc, None)
+    asteroids.DestroyBuffer(d, asteroids.attributes_buffer, None)
+    asteroids.DestroyBuffer(d, asteroids.game_data_buffer, None)
+    asteroids.DestroyBuffer(d, asteroids.game_state_buffer, None)
+    asteroids.FreeMemory(d, asteroids.final_alloc, None)
+    asteroids.FreeMemory(d, asteroids.game_state_alloc, None)
 
-    for fence in tetris.fences:
-        tetris.DestroyFence(d, fence, None)
+    for fence in asteroids.fences:
+        asteroids.DestroyFence(d, fence, None)
 
-    tetris.DestroySemaphore(d, tetris.semaphores[0], None)
-    tetris.DestroySemaphore(d, tetris.semaphores[1], None)
+    asteroids.DestroySemaphore(d, asteroids.semaphores[0], None)
+    asteroids.DestroySemaphore(d, asteroids.semaphores[1], None)
 
-    for fb in tetris.framebuffers:
-        tetris.DestroyFramebuffer(d, fb, None)
+    for fb in asteroids.framebuffers:
+        asteroids.DestroyFramebuffer(d, fb, None)
 
-    tetris.DestroyRenderPass(d, tetris.render_pass, None)
+    asteroids.DestroyRenderPass(d, asteroids.render_pass, None)
 
-    tetris.DestroyImageView(d, tetris.depth_view, None)
-    tetris.FreeMemory(d, tetris.depth_memory, None)
-    tetris.DestroyImage(d, tetris.depth_image, None)
+    asteroids.DestroyImageView(d, asteroids.depth_view, None)
+    asteroids.FreeMemory(d, asteroids.depth_memory, None)
+    asteroids.DestroyImage(d, asteroids.depth_image, None)
 
-    for _, view in tetris.swapchain_images:
-        tetris.DestroyImageView(d, view, None)
+    for _, view in asteroids.swapchain_images:
+        asteroids.DestroyImageView(d, view, None)
 
-    tetris.DestroySwapchainKHR(d, tetris.swapchain, None)
-    tetris.DestroyDevice(d, None)
-    tetris.DestroySurfaceKHR(i, tetris.surface, None)
+    asteroids.DestroySwapchainKHR(d, asteroids.swapchain, None)
+    asteroids.DestroyDevice(d, None)
+    asteroids.DestroySurfaceKHR(i, asteroids.surface, None)
 
     if DEBUG:
-        tetris.DestroyDebugUtilsMessengerEXT(i, tetris.debug_utils, None)
+        asteroids.DestroyDebugUtilsMessengerEXT(i, asteroids.debug_utils, None)
 
-    tetris.DestroyInstance(i, None)
+    asteroids.DestroyInstance(i, None)
 
 
 # Shader constants
@@ -1909,41 +1909,41 @@ class Tetris(object): pass
 
 
 def run():
-    tetris = Tetris()
+    asteroids = Tetris()
     
-    create_window(tetris)
+    create_window(asteroids)
 
-    create_instance(tetris)
-    create_debug_utils(tetris)
-    create_surface(tetris)
-    create_device(tetris)
+    create_instance(asteroids)
+    create_debug_utils(asteroids)
+    create_surface(asteroids)
+    create_device(asteroids)
 
-    create_swapchain(tetris)
-    create_swapchain_images(tetris)
-    create_depth_stencil(tetris)
-    create_render_pass(tetris)
-    create_framebuffers(tetris)
+    create_swapchain(asteroids)
+    create_swapchain_images(asteroids)
+    create_depth_stencil(asteroids)
+    create_render_pass(asteroids)
+    create_framebuffers(asteroids)
 
-    create_semaphores(tetris)
-    create_fences(tetris)
-    create_commands(tetris)
-    create_buffers(tetris)
-    create_game_state_buffer(tetris)
+    create_semaphores(asteroids)
+    create_fences(asteroids)
+    create_commands(asteroids)
+    create_buffers(asteroids)
+    create_game_state_buffer(asteroids)
 
-    create_shaders(tetris)
-    create_descriptor_set_layouts(tetris)
-    create_descriptors(tetris)
-    update_descriptor_sets(tetris)
-    create_pipeline_layouts(tetris)
-    create_compute_pipeline(tetris)
-    create_render_pipeline(tetris)
-    create_render_cache(tetris)
+    create_shaders(asteroids)
+    create_descriptor_set_layouts(asteroids)
+    create_descriptors(asteroids)
+    update_descriptor_sets(asteroids)
+    create_pipeline_layouts(asteroids)
+    create_compute_pipeline(asteroids)
+    create_render_pipeline(asteroids)
+    create_render_cache(asteroids)
 
-    record_commands(tetris)
+    record_commands(asteroids)
 
-    run_loop(tetris)
+    run_loop(asteroids)
 
-    cleanup(tetris)
+    cleanup(asteroids)
 
     print("It's over")
 

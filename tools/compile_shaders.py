@@ -20,7 +20,7 @@ path = Path(".")
 # input_index = argv.index("--input")
 # input_shader = argv[input_index+1]
 # pattern = f"**/{input_shader}.*"
-pattern = "tetris*.*"
+pattern = "asteroids*.*"
 
 outputs = {}
 
