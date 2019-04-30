@@ -4,7 +4,7 @@ A very simple copy of the arcade game "asteroids" that runs entirely inside shad
 
 The program was tested on AMD and Nvdia hardware. Sadly, my Intel igpu do not support the required extension.
 
-For more detail, see my blog post here: TODO
+For more detail, see my blog post here: <https://gabdube.github.io/python/vulkan/2019/01/10/shader-games.html>
 
 ![Image](/img/img.png "Image")  
 
