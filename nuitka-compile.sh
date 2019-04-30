@@ -1,4 +1,4 @@
-python -m nuitka tetris.py\
+python -m nuitka asteroids.py\
   --include-plugin-directory ./libs/system\
   --include-plugin-directory ./libs/vulkan\
   --follow-imports\

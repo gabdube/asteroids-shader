@@ -18,14 +18,22 @@ For more detail, see my blog post here: TODO
 
 ## Run
 
+### From the windows binary
+
+Download the binary from `https://github.com/gabdube/asteroids-shader/releases/tag/1.0.0` and the `asteroids.exe`
+
+### From the source
+
 ```sh
+git clone git@github.com:gabdube/asteroids-shader.git
+cd asteroids-shader
 python tools/compile_shaders.py
 python asteroids.py
 ```
 
 ## Commands
 
-Stuff that I am too lazy to type
+Stuff that I am too lazy to type manually
 
 ```sh
 source ./env/Scripts/activate

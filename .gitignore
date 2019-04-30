@@ -12,5 +12,5 @@ python/
 env/
 dist/
 panic-panda.spec
-tetris.build/
-tetris.dist/
+*.build/
+*.dist/
