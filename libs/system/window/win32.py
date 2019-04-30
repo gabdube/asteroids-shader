@@ -249,7 +249,7 @@ class Win32Window(object):
     """
 
     def __init__(self, **kwargs):
-        __allowed_kwargs = ('width', 'height')
+        __allowed_kwargs = ('width', 'height', 'fixed')
         bad_kwargs_keys = [k for k in kwargs.keys() if k not in __allowed_kwargs]
         if len(bad_kwargs_keys) != 0 and type(self) is Win32Window:
             raise AttributeError("Some unknown keyword were found: {}".format(','.join(bad_kwargs_keys)))
@@ -282,10 +282,14 @@ class Win32Window(object):
         RegisterClassExW(byref(class_def))
 
         # Create the window
+        style = WS_OVERLAPPEDWINDOW
+        if kwargs.get('fixed', False):
+            style &= ~WS_THICKFRAME
+
         hwnd = CreateWindowExW(
             0, self.__class_name,
             "VulkanTests",
-            WS_OVERLAPPEDWINDOW,
+            style,
             x, y,
             width, height,
             NULL, NULL, mod, NULL

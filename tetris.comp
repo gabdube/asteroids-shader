@@ -196,14 +196,16 @@ void beginNewLevel() {
     }
 
     // Instanciation
-    uint totalAsteroidsCount = game.currentLevel + 3;
-    float ftime = float(state.currentTime);
-    float x, y, a, j;
-    float vel = 0.5 + (0.1*float(game.currentLevel));
-    uint index, meshIndex;
-    float rando = 0.0;
     vec2 playerPos = game.objects[0].position;
 
+    uint totalAsteroidsCount = game.currentLevel + 3;
+    uint index, meshIndex;
+
+    float ftime = float(state.currentTime);
+    float x, y, j;
+    float vel = 0.5 + (0.1*float(game.currentLevel));
+    float rando = 0.0;
+    
     for (uint i = 0; i < totalAsteroidsCount; i++) {
         index = nextFreeObject();
         if (index == 0) {
@@ -227,7 +229,7 @@ void beginNewLevel() {
             j += 0.001;
         } while ( distance(playerPos, vec2(x, y)) < 0.21 );
         
-        a = hash11(rando + i * + 97.129) * (2*PI);
+        j = hash11(rando + i * + 97.129) * (2*PI);
 
         game.objects[index] = GameObject(
             VkDrawIndexedIndirectCommand(
@@ -239,8 +241,8 @@ void beginNewLevel() {
             STATUS_ACTIVE,
 
             vec2(x, y),                    // pos
-            a, vel,                        // angle / vel
-            a, PI,                         // display angle / display angle velocity
+            j, vel,                        // angle / vel
+            j, PI,                         // display angle / display angle velocity
             IDENTITY
         );
     }

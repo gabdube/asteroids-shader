@@ -155,7 +155,7 @@ def physical_device_surface_capabilities(tetris):
 #
 
 def create_window(tetris):
-    tetris.window = Window(width=800, height=800)
+    tetris.window = Window(width=800, height=800, fixed=True)
 
 
 #
