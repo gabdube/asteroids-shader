@@ -339,9 +339,9 @@ free.argtypes = (c_void_p,)
 class XcbWindow(object):
     
     def __init__(self, **kwargs):
-        __allowed_kwargs = ('width', 'height')
+        __allowed_kwargs = ('width', 'height', 'fixed')
         bad_kwargs_keys = [k for k in kwargs.keys() if k not in __allowed_kwargs]
-        if len(bad_kwargs_keys) != 0 and type(self) is Win32Window:
+        if len(bad_kwargs_keys) != 0 and type(self) is XcbWindow:
             raise AttributeError("Some unknown keyword were found: {}".format(','.join(bad_kwargs_keys)))
 
         # Setup a window using XCB
